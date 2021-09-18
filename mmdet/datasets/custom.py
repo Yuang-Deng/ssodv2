@@ -2,6 +2,7 @@
 import os.path as osp
 import warnings
 from collections import OrderedDict
+import json
 
 import mmcv
 import numpy as np
@@ -63,7 +64,8 @@ class CustomDataset(Dataset):
                  seg_prefix=None,
                  proposal_file=None,
                  test_mode=False,
-                 filter_empty_gt=True):
+                 filter_empty_gt=True,
+                 sample_persent=100):
         self.ann_file = ann_file
         self.data_root = data_root
         self.img_prefix = img_prefix
@@ -72,6 +74,7 @@ class CustomDataset(Dataset):
         self.test_mode = test_mode
         self.filter_empty_gt = filter_empty_gt
         self.CLASSES = self.get_classes(classes)
+        self.sample_persent = sample_persent
 
         # join paths if data_root is specified
         if self.data_root is not None:
@@ -167,11 +170,28 @@ class CustomDataset(Dataset):
         Images with aspect ratio greater than 1 will be set as group 1,
         otherwise group 0.
         """
+        # with open("C:/Users/Alex/WorkSpace/pycharm/STAC-UFO/data/coco/annotations/cocosample.json", 'r') as load_f:
+        #     load_dict = json.load(load_f)
+        #     sample_set = load_dict[str(self.sample_persent)]
         self.flag = np.zeros(len(self), dtype=np.uint8)
         for i in range(len(self)):
             img_info = self.data_infos[i]
             if img_info['width'] / img_info['height'] > 1:
                 self.flag[i] = 1
+            # if img_info['width'] / img_info['height'] > 1:
+            #     if i in sample_set:
+            #         self.flag[i] = 0
+            #         img_info['label_type'] = 0
+            #     else:
+            #         self.flag[i] = 2
+            #         img_info['label_type'] = 1
+            # else:
+            #     if i in sample_set:
+            #         self.flag[i] = 1
+            #         img_info['label_type'] = 0
+            #     else:
+            #         self.flag[i] = 3
+            #         img_info['label_type'] = 1
 
     def _rand_another(self, idx):
         """Get another random index from the same group as the given index."""

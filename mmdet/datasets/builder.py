@@ -8,6 +8,7 @@ import numpy as np
 from mmcv.parallel import collate
 from mmcv.runner import get_dist_info
 from mmcv.utils import Registry, build_from_cfg
+from torch.utils import data
 from torch.utils.data import DataLoader
 
 from .samplers import DistributedGroupSampler, DistributedSampler, GroupSampler
@@ -32,6 +33,7 @@ def _concat_dataset(cfg, default_args=None):
     seg_prefixes = cfg.get('seg_prefix', None)
     proposal_files = cfg.get('proposal_file', None)
     separate_eval = cfg.get('separate_eval', True)
+    sample_percent = cfg.get('sample_persent', None)
 
     datasets = []
     num_dset = len(ann_files)
@@ -47,6 +49,8 @@ def _concat_dataset(cfg, default_args=None):
             data_cfg['seg_prefix'] = seg_prefixes[i]
         if isinstance(proposal_files, (list, tuple)):
             data_cfg['proposal_file'] = proposal_files[i]
+        if sample_percent is not None:
+            data_cfg['sample_persent'] = sample_percent[i]
         datasets.append(build_dataset(data_cfg, default_args))
 
     return ConcatDataset(datasets, separate_eval)

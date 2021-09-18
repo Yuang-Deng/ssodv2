@@ -16,14 +16,12 @@ class GroupSampler(Sampler):
         self.flag = dataset.flag.astype(np.int64)
         self.group_sizes = np.bincount(self.flag)
         self.num_samples = 0
-        # self.group_sizes = self.group_sizes[:2]
         for i, size in enumerate(self.group_sizes):
             self.num_samples += int(np.ceil(
                 size / self.samples_per_gpu)) * self.samples_per_gpu
 
     def __iter__(self):
         indices = []
-        # self.group_sizes = self.group_sizes[:2]
         for i, size in enumerate(self.group_sizes):
             if size == 0:
                 continue
@@ -43,11 +41,7 @@ class GroupSampler(Sampler):
         ]
         indices = np.concatenate(indices)
         indices = indices.astype(np.int64).tolist()
-        # assert len(indices) == self.num_samples
-        # indice = indices
-        # for i in range(100):
-        #     indices = np.concatenate([indices, indice])
-        # self.num_samples = len(indices)
+        assert len(indices) == self.num_samples
         return iter(indices)
 
     def __len__(self):
