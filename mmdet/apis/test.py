@@ -1,9 +1,22 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+from enum import Flag
+import numpy as np
+import torch
+from cv2 import add
+from mmdet.core.evaluation.class_names import voc_classes
 import os.path as osp
 import pickle
 import shutil
 import tempfile
 import time
+import os
+from xml.dom.minidom import Document
+from mmdet.core import multiclass_nms
+
+VOC_CLASSES = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car',
+               'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse',
+               'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train',
+               'tvmonitor']
 
 import mmcv
 import torch
@@ -18,16 +31,67 @@ def single_gpu_test(model,
                     data_loader,
                     show=False,
                     out_dir=None,
-                    show_score_thr=0.3):
+                    show_score_thr=0.9):
     model.eval()
+    add_num = 0
+    add_num_local = 0
     results = []
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
     for i, data in enumerate(data_loader):
+        flag = False
+        if 'gt_labels' in data.keys():
+            tags = data.pop('gt_labels')
+            box = data.pop('gt_bboxes')
+            ori_box = data.pop('ori_boxes')
+            flag = True
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
-
+            if flag:
+                # for idx, (d, tags_img, box_img, r) in enumerate(zip(data['img_metas'], tags, box, result)):
+                #     l1 = 0
+                #     for bb in r:
+                #         l1 += len(bb)
+                #     l2 = box_img.shape[1]
+                #     boxfornms = torch.zeros([l1+l2,80])
+                #     labelfornms = torch.zeros([l1+l2,21])
+                #     index = 0
+                #     for i in range(len(r)):
+                #         bb = r[i]
+                #         for b in bb:
+                #             if b[4] >= show_score_thr:
+                #                 boxfornms[index, i*4:(i+1)*4] = b[:4]
+                #                 labelfornms[index, i] = b[4]
+                #                 index += 1
+                #     for b, t in zip(box_img, tags_img):
+                #         boxfornms[index, tags_img*4:(tags_img+1)*4] = b[:]
+                #         labelfornms[index, tags_img] = show_score_thr - 0.1
+                #         index += 1
+                # nms_cfg = {'type': 'nms', 'iou_threshold': 0.5}
+                # multiclass_nms(boxfornms, labelfornms, show_score_thr - 0.11, nms_cfg,
+                #                                     100)
+                cur_add_num = gen_voc_label(data, result, tags, box, ori_box, show_score_thr)
+                add_num += cur_add_num
+                print(cur_add_num)
         batch_size = len(result)
+        add_boxes = 0
+        # for i in range(len(result[0])):
+        #     result[0][i] = np.zeros([0,5])
+        for b, t in zip(ori_box[0], tags[0]):
+            for bb,tt in zip(b,t):
+                bb = bb.numpy()
+                flag = True
+                for r in result[0]:
+                    for rb in r:
+                        if cal_iou(bb,rb[:4]) > 0.3 and rb[4] > show_score_thr:
+                            flag = False
+                if flag:
+                    add_boxes += 1
+                    zero = np.ones([1])
+                    add_b = np.concatenate([bb, zero])
+                    result[0][0] = np.concatenate([result[0][0], add_b[None,:]])
+        print(add_boxes)
+        add_num_local += add_boxes
         if show or out_dir:
             if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
                 img_tensor = data['img'][0]
@@ -64,6 +128,7 @@ def single_gpu_test(model,
 
         for _ in range(batch_size):
             prog_bar.update()
+    print(add_num, add_num_local)
     return results
 
 
@@ -189,3 +254,165 @@ def collect_results_gpu(result_part, size):
         # the dataloader may pad some samples
         ordered_results = ordered_results[:size]
         return ordered_results
+
+def gen_voc_label(data, result, tags, boxes, ori_boxes, pseudo_th=0.9):
+    add_num = 0
+    for idx, (d, tags_img, box_img, ori_box, r) in enumerate(zip(data['img_metas'], tags, boxes, ori_boxes, result)):
+        if 'test' in d.data[0][0]['filename']:
+            continue
+        doc = Document()
+        annotation = doc.createElement("annotation")
+        doc.appendChild(annotation)
+        folder = doc.createElement("folder")
+        filename = doc.createElement("filename")
+        size = doc.createElement("size")
+        width = doc.createElement("width")
+        height = doc.createElement("height")
+        depth = doc.createElement("depth")
+        size.appendChild(width)
+        size.appendChild(height)
+        size.appendChild(depth)
+        annotation.appendChild(folder)
+        annotation.appendChild(filename)
+        annotation.appendChild(size)
+        filenamee = doc.createTextNode(d.data[0][0]['ori_filename'].split('\\')[1])
+        foldername = doc.createTextNode(d.data[0][0]['ori_filename'].split('\\')[0])
+        widthnum = doc.createTextNode(str(d.data[0][0]['ori_shape'][0]))
+        heightnum = doc.createTextNode(str(d.data[0][0]['ori_shape'][1]))
+        depthnum = doc.createTextNode(str(d.data[0][0]['ori_shape'][2]))
+        folder.appendChild(foldername)
+        filename.appendChild(filenamee)
+        width.appendChild(widthnum)
+        height.appendChild(heightnum)
+        depth.appendChild(depthnum)
+        for t in tags_img[0]:
+            tag = doc.createElement("tag")
+            tagname = doc.createTextNode(VOC_CLASSES[t])
+            tag.appendChild(tagname)
+            annotation.appendChild(tag)
+        for b, t in zip(ori_box[0], tags_img[0]):
+            b = b.numpy()
+            point = doc.createElement("point")
+            point_x = doc.createElement("point_x")
+            point_y = doc.createElement("point_y")
+            x = doc.createTextNode(str(((b[0] + b[2]) / 2))[7:-1])
+            y = doc.createTextNode(str(((b[1] + b[3]) / 2))[7:-1])
+            point_x.appendChild(x)
+            point_y.appendChild(y)
+            point.appendChild(point_x)
+            point.appendChild(point_y)
+            annotation.appendChild(point)
+            flag = True
+            for ridx in range(len(r)):
+                for r_box in r[ridx]:
+                    if cal_iou(b,r_box[:4]) > 0.3 and r_box[4] > pseudo_th:
+                        flag = False
+            if flag:
+                add_num += 1
+                objectt = doc.createElement("object")
+                annotation.appendChild(objectt)
+                bndbox = doc.createElement("bndbox")
+                objectt.appendChild(bndbox)
+                xmin = doc.createElement("xmin")
+                ymin = doc.createElement("ymin")
+                xmax = doc.createElement("xmax")
+                ymax = doc.createElement("ymax")
+                score = doc.createElement("score")
+                calss = doc.createElement("name")
+                objectt.appendChild(calss)
+                calss.appendChild(doc.createTextNode(VOC_CLASSES[t]))
+                bndbox.appendChild(xmin)
+                bndbox.appendChild(ymin)
+                bndbox.appendChild(xmax)
+                bndbox.appendChild(ymax)
+                bndbox.appendChild(score)
+                difficult = doc.createElement("difficult")
+                difficult.appendChild(doc.createTextNode('0'))
+                objectt.appendChild(difficult)
+                xminnum = doc.createTextNode(str(b[0]))
+                yminnum = doc.createTextNode(str(b[1]))
+                xmaxnum = doc.createTextNode(str(b[2]))
+                ymaxnum = doc.createTextNode(str(b[3]))
+                scorenum = doc.createTextNode(str(1))
+                xmin.appendChild(xminnum)
+                ymin.appendChild(yminnum)
+                xmax.appendChild(xmaxnum)
+                ymax.appendChild(ymaxnum)
+                score.appendChild(scorenum)
+        for ridx in range(len(r)):
+            classname = VOC_CLASSES[ridx]
+            for box in r[ridx]:
+                # print(box[4])
+                if box[4] < pseudo_th:
+                    continue
+                # print(box)
+                objectt = doc.createElement("object")
+                annotation.appendChild(objectt)
+                bndbox = doc.createElement("bndbox")
+                objectt.appendChild(bndbox)
+                xmin = doc.createElement("xmin")
+                ymin = doc.createElement("ymin")
+                xmax = doc.createElement("xmax")
+                ymax = doc.createElement("ymax")
+                score = doc.createElement("score")
+                calss = doc.createElement("name")
+                objectt.appendChild(calss)
+                calss.appendChild(doc.createTextNode(classname))
+                bndbox.appendChild(xmin)
+                bndbox.appendChild(ymin)
+                bndbox.appendChild(xmax)
+                bndbox.appendChild(ymax)
+                bndbox.appendChild(score)
+                difficult = doc.createElement("difficult")
+                difficult.appendChild(doc.createTextNode('0'))
+                objectt.appendChild(difficult)
+                xminnum = doc.createTextNode(str(box[0]))
+                yminnum = doc.createTextNode(str(box[1]))
+                xmaxnum = doc.createTextNode(str(box[2]))
+                ymaxnum = doc.createTextNode(str(box[3]))
+                scorenum = doc.createTextNode(str(box[4]))
+                xmin.appendChild(xminnum)
+                ymin.appendChild(yminnum)
+                xmax.appendChild(xmaxnum)
+                ymax.appendChild(ymaxnum)
+                score.appendChild(scorenum)
+        # f = open(os.path.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit', os.path.join(d.data[0][0]['filename'].split('/')[7],
+        #                                                      os.path.join('Annotations',
+        #                                                                   d.data[0][0][
+        #                                                                       'ori_filename'].split(
+        #                                                                       '\\')[1].split('.')[
+        #                                                                       0] + '.xml'))),
+        #          "w")
+        # f.write(doc.toprettyxml(indent="  "))
+        # f.close()
+    return add_num
+
+
+def cal_iou(box1, box2):
+
+    """
+    computing IoU
+    :param rec1: (y0, x0, y1, x1), which reflects
+            (top, left, bottom, right)
+    :param rec2: (y0, x0, y1, x1)
+    :return: scala value of IoU
+    """
+    # computing area of each rectangles
+    S_rec1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    S_rec2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+ 
+    # computing the sum_area
+    sum_area = S_rec1 + S_rec2
+ 
+    # find the each edge of intersect rectangle
+    left_line = max(box1[1], box2[1])
+    right_line = min(box1[3], box2[3])
+    top_line = max(box1[0], box2[0])
+    bottom_line = min(box1[2], box2[2])
+ 
+    # judge if there is an intersect
+    if left_line >= right_line or top_line >= bottom_line:
+        return 0
+    else:
+        intersect = (right_line - left_line) * (bottom_line - top_line)
+        return (intersect / (sum_area - intersect))*1.0

@@ -1,0 +1,3 @@
+python ./tools/train.py ./configs/faster_rcnn/faster_rcnn_r50_fpn_1x_coco.py --resume-from=./work_dirs/faster_rcnn_r50_fpn_1x_coco/latest.pth
+python ./tools/test.py ./configs/faster_rcnn/faster_rcnn_r50_fpn_1x_coco.py --resume-from=./work_dirs/faster_rcnn_r50_fpn_1x_coco/latest.pth --out=./work_dirs/fcos_r50_caffe_fpn_gn-head_1x_coco/out/out.pkl
+python ./tools/train.py ./configs/faster_rcnn/faster_rcnn_r50_fpn_1x_coco_stage2.py
