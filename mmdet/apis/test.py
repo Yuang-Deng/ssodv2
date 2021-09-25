@@ -33,7 +33,9 @@ def single_gpu_test(model,
                     out_dir=None,
                     show_score_thr=0.9):
     model.eval()
-    add_num = 0
+    add_num = [0] * 20
+    pseudo_num = [0] * 20
+    ori_num = [0] * 20
     add_num_local = 0
     results = []
     dataset = data_loader.dataset
@@ -70,15 +72,31 @@ def single_gpu_test(model,
                 # nms_cfg = {'type': 'nms', 'iou_threshold': 0.5}
                 # multiclass_nms(boxfornms, labelfornms, show_score_thr - 0.11, nms_cfg,
                 #                                     100)
-                cur_add_num = gen_voc_label(data, result, tags, box, ori_box, show_score_thr)
-                add_num += cur_add_num
-                print(cur_add_num)
+                cur_add_num, cur_pseudo_num = gen_voc_label(data, result, tags, box, ori_box, show_score_thr)
+                for i in range(len(cur_add_num)):
+                    add_num[i] += cur_add_num[i]
+                for i in range(len(cur_pseudo_num)):
+                    pseudo_num[i] += cur_pseudo_num[i]
+                # for k, v in cur_add_num.items():
+                #     k = k.item()
+                #     if k not in add_num.keys():
+                #         add_num[k] = 0
+                #     add_num[k] += v
+                # for k, v in cur_pseudo_num.items():
+                #     k = k.item()
+                #     if k not in pseudo_num.keys():
+                #         pseudo_num[k] = 0
+                #     pseudo_num[k] += v
         batch_size = len(result)
         add_boxes = 0
         # for i in range(len(result[0])):
         #     result[0][i] = np.zeros([0,5])
         for b, t in zip(ori_box[0], tags[0]):
             for bb,tt in zip(b,t):
+                # k_t = tt.item()
+                # if k_t not in ori_num.keys():
+                #     ori_num[k_t] = 0
+                ori_num[tt.item()] += 1
                 bb = bb.numpy()
                 flag = True
                 for r in result[0]:
@@ -128,7 +146,10 @@ def single_gpu_test(model,
 
         for _ in range(batch_size):
             prog_bar.update()
-    print(add_num, add_num_local)
+    print()
+    print(add_num)
+    print(pseudo_num)
+    print(ori_num)
     return results
 
 
@@ -256,7 +277,9 @@ def collect_results_gpu(result_part, size):
         return ordered_results
 
 def gen_voc_label(data, result, tags, boxes, ori_boxes, pseudo_th=0.9):
-    add_num = 0
+    
+    add_num = [0]*20
+    pseudo_num = [0]*20
     for idx, (d, tags_img, box_img, ori_box, r) in enumerate(zip(data['img_metas'], tags, boxes, ori_boxes, result)):
         if 'test' in d.data[0][0]['filename']:
             continue
@@ -308,7 +331,7 @@ def gen_voc_label(data, result, tags, boxes, ori_boxes, pseudo_th=0.9):
                     if cal_iou(b,r_box[:4]) > 0.3 and r_box[4] > pseudo_th:
                         flag = False
             if flag:
-                add_num += 1
+                add_num[t.item()] += 1
                 objectt = doc.createElement("object")
                 annotation.appendChild(objectt)
                 bndbox = doc.createElement("bndbox")
@@ -346,6 +369,7 @@ def gen_voc_label(data, result, tags, boxes, ori_boxes, pseudo_th=0.9):
                 if box[4] < pseudo_th:
                     continue
                 # print(box)
+                pseudo_num[t.item()] += 1
                 objectt = doc.createElement("object")
                 annotation.appendChild(objectt)
                 bndbox = doc.createElement("bndbox")
@@ -385,7 +409,7 @@ def gen_voc_label(data, result, tags, boxes, ori_boxes, pseudo_th=0.9):
         #          "w")
         # f.write(doc.toprettyxml(indent="  "))
         # f.close()
-    return add_num
+    return add_num, pseudo_num
 
 
 def cal_iou(box1, box2):
