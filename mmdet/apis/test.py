@@ -31,7 +31,12 @@ def single_gpu_test(model,
                     data_loader,
                     show=False,
                     out_dir=None,
-                    show_score_thr=0.9):
+                    show_score_thr=0.9,
+                    ):
+    dy_th=[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+               0.5, 0.7, 0.5, 0.5, 0.5, 0.5,
+               0.5, 0.7, 0.5, 0.5, 0.5, 0.5,
+               0.5]
     model.eval()
     add_num = [0] * 20
     pseudo_num = [0] * 20
@@ -72,7 +77,7 @@ def single_gpu_test(model,
                 # nms_cfg = {'type': 'nms', 'iou_threshold': 0.5}
                 # multiclass_nms(boxfornms, labelfornms, show_score_thr - 0.11, nms_cfg,
                 #                                     100)
-                cur_add_num, cur_pseudo_num = gen_voc_label(data, result, tags, box, ori_box, show_score_thr)
+                cur_add_num, cur_pseudo_num = gen_voc_label(data, result, tags, box, ori_box, dy_th)
                 for i in range(len(cur_add_num)):
                     add_num[i] += cur_add_num[i]
                 for i in range(len(cur_pseudo_num)):
@@ -98,16 +103,16 @@ def single_gpu_test(model,
                 #     ori_num[k_t] = 0
                 ori_num[tt.item()] += 1
                 bb = bb.numpy()
-                flag = True
-                for r in result[0]:
-                    for rb in r:
-                        if cal_iou(bb,rb[:4]) > 0.3 and rb[4] > show_score_thr:
-                            flag = False
-                if flag:
-                    add_boxes += 1
-                    zero = np.ones([1])
-                    add_b = np.concatenate([bb, zero])
-                    result[0][0] = np.concatenate([result[0][0], add_b[None,:]])
+                # flag = True
+                # for r in result[0]:
+                #     for rb in r:
+                #         if cal_iou(bb,rb[:4]) > 0.3 and rb[4] > show_score_thr:
+                #             flag = False
+                # if flag:
+                #     add_boxes += 1
+                #     zero = np.ones([1])
+                #     add_b = np.concatenate([bb, zero])
+                #     result[0][0] = np.concatenate([result[0][0], add_b[None,:]])
         print(add_boxes)
         add_num_local += add_boxes
         if show or out_dir:
@@ -328,7 +333,7 @@ def gen_voc_label(data, result, tags, boxes, ori_boxes, pseudo_th=0.9):
             flag = True
             for ridx in range(len(r)):
                 for r_box in r[ridx]:
-                    if cal_iou(b,r_box[:4]) > 0.3 and r_box[4] > pseudo_th:
+                    if cal_iou(b,r_box[:4]) > 0.3 and r_box[4] > pseudo_th[ridx]:
                         flag = False
             if flag:
                 add_num[t.item()] += 1
@@ -366,7 +371,7 @@ def gen_voc_label(data, result, tags, boxes, ori_boxes, pseudo_th=0.9):
             classname = VOC_CLASSES[ridx]
             for box in r[ridx]:
                 # print(box[4])
-                if box[4] < pseudo_th:
+                if box[4] < pseudo_th[ridx]:
                     continue
                 # print(box)
                 pseudo_num[t.item()] += 1

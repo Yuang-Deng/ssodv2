@@ -53,6 +53,12 @@ def parse_args():
         type=float,
         default=0.3,
         help='score threshold (default: 0.3)')
+    # parser.add_argument(
+    #     '--dy_th',
+    #     nargs='+',
+
+    #     default=[],
+    #     help='score threshold (default: 0.3)')
     parser.add_argument(
         '--gpu-collect',
         action='store_true',
