@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.runner import BaseModule, auto_fp16, force_fp32
 from torch.nn.modules.utils import _pair
+import numpy as np
 
 from mmdet.core import build_bbox_coder, multi_apply, multiclass_nms
 from mmdet.models.builder import HEADS, build_loss
@@ -247,6 +248,9 @@ class BBoxHead(BaseModule):
             bbox_weights = torch.cat(bbox_weights, 0)
         return labels, label_weights, bbox_targets, bbox_weights
 
+    def _gaussian_dist_pdf(self, val, mean, var):
+        return torch.exp(- (val - mean) ** 2.0 / var / 2.0) / torch.sqrt(2.0 * np.pi * var)
+
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
     def loss(self,
              cls_score,
@@ -258,6 +262,19 @@ class BBoxHead(BaseModule):
              bbox_weights,
              reduction_override=None):
         losses = dict()
+        
+
+        # xishu softmax    fangcha relu
+        box_rep_len = (cls_score.size(1) - 1) * 4
+        gmm_k =  bbox_pred.size(1) // (box_rep_len * 3)
+        bbox_pred = bbox_pred.view(bbox_pred.size(0), 3, -1)
+        mu_box = bbox_pred[:, 0, :].view(bbox_pred.size(0), gmm_k, -1)
+        sigma_box = bbox_pred[:, 1, :].view(bbox_pred.size(0), gmm_k, -1)
+        pi_box = bbox_pred[:, 2, :].view(bbox_pred.size(0), gmm_k, -1)
+
+        pi_box = F.softmax(pi_box, dim=1)
+        sigma_box = F.sigmoid(sigma_box)
+
         if cls_score is not None:
             avg_factor = max(torch.sum(label_weights > 0).float().item(), 1.)
             if cls_score.numel() > 0:
@@ -292,16 +309,33 @@ class BBoxHead(BaseModule):
                     pos_bbox_pred = bbox_pred.view(
                         bbox_pred.size(0), 4)[pos_inds.type(torch.bool)]
                 else:
-                    pos_bbox_pred = bbox_pred.view(
-                        bbox_pred.size(0), -1,
-                        4)[pos_inds.type(torch.bool),
+                    pos_mu_box = mu_box.view(
+                        bbox_pred.size(0), gmm_k, -1,
+                        4)[pos_inds.type(torch.bool), :,
                            labels[pos_inds.type(torch.bool)]]
-                losses['loss_bbox'] = self.loss_bbox(
-                    pos_bbox_pred,
-                    bbox_targets[pos_inds.type(torch.bool)],
-                    bbox_weights[pos_inds.type(torch.bool)],
-                    avg_factor=bbox_targets.size(0),
-                    reduction_override=reduction_override)
+                    pos_sigma_box = sigma_box.view(
+                        bbox_pred.size(0), gmm_k, -1,
+                        4)[pos_inds.type(torch.bool), :,
+                           labels[pos_inds.type(torch.bool)]]
+                    pos_pi_box = pi_box.view(
+                        bbox_pred.size(0), gmm_k, -1,
+                        4)[pos_inds.type(torch.bool), :,
+                           labels[pos_inds.type(torch.bool)]]
+                    pos_target = bbox_targets[pos_inds.type(torch.bool)]
+                    pos_target = pos_target[:, None, :].expand(pos_target.size(0), gmm_k, pos_target.size(1))
+                    # pos_bbox_pred = bbox_pred.view(
+                    #     bbox_pred.size(0), -1,
+                    #     4)[pos_inds.type(torch.bool),
+                    #        labels[pos_inds.type(torch.bool)]]
+                # losses['loss_bbox'] = self.loss_bbox(
+                #     pos_bbox_pred,
+                #     bbox_targets[pos_inds.type(torch.bool)],
+                #     bbox_weights[pos_inds.type(torch.bool)],
+                #     avg_factor=bbox_targets.size(0),
+                #     reduction_override=reduction_override)
+                loss_xy = - torch.log(
+                            self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box) + 1e-9) / 2.0
+                losses['loss_bbox'] = (loss_xy * pos_pi_box).sum() / pos_mu_box.size(0)
             else:
                 losses['loss_bbox'] = bbox_pred[pos_inds].sum()
         return losses

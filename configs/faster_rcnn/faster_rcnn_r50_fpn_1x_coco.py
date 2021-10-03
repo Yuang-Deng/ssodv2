@@ -5,10 +5,38 @@ _base_ = [
 ]
 
 model = dict(
-    train_cfg=dict(
-        rcnn=dict(
-            gmm = 3)),
+    roi_head=dict(
+        bbox_head=dict(
+            type='GMMShared2FCBBoxHead',
+            in_channels=256,
+            fc_out_channels=1024,
+            roi_feat_size=7,
+            num_classes=20,
+            gmm_k=4,
+            bbox_coder=dict(
+                type='DeltaXYWHBBoxCoder',
+                target_means=[0., 0., 0., 0.],
+                target_stds=[0.1, 0.1, 0.2, 0.2]),
+            reg_class_agnostic=False,
+            loss_cls=dict(
+                type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
+            loss_bbox=dict(type='L1Loss', loss_weight=1.0))),
 )
+data = dict(
+    samples_per_gpu=16,
+    workers_per_gpu=8,
+)
+runner = dict(type='EpochBasedRunner', max_epochs=12)
+
+# lr_config = dict(
+#     policy='step',
+#     warmup='linear',
+#     warmup_iters=500,
+#     warmup_ratio=0.001,
+#     step=[120000, 160000])
+# runner = dict(type='IterBasedRunner', max_iters=180000)
+# checkpoint_config = dict(interval=10000)
+# evaluation = dict(interval=10000, metric='mAP')
 
 # # learning policy
 # lr_config = dict(
