@@ -333,8 +333,7 @@ class BBoxHead(BaseModule):
                 #     bbox_weights[pos_inds.type(torch.bool)],
                 #     avg_factor=bbox_targets.size(0),
                 #     reduction_override=reduction_override)
-                loss_xy = - torch.log(
-                            self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box) + 1e-9) / 2.0
+                loss_xy = - torch.log(self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box) + 1e-9) / 2.0
                 losses['loss_bbox'] = (loss_xy * pos_pi_box).sum() / pos_mu_box.size(0)
             else:
                 losses['loss_bbox'] = bbox_pred[pos_inds].sum()
@@ -382,6 +381,18 @@ class BBoxHead(BaseModule):
                 cls_score, dim=-1) if cls_score is not None else None
         # bbox_pred would be None in some detector when with_reg is False,
         # e.g. Grid R-CNN.
+
+        box_rep_len = (cls_score.size(1) - 1) * 4
+        gmm_k =  bbox_pred.size(1) // (box_rep_len * 3)
+        bbox_pred = bbox_pred.view(bbox_pred.size(0), 3, -1)
+        mu_box = bbox_pred[:, 0, :].view(bbox_pred.size(0), gmm_k, -1)
+        sigma_box = bbox_pred[:, 1, :].view(bbox_pred.size(0), gmm_k, -1)
+        pi_box = bbox_pred[:, 2, :].view(bbox_pred.size(0), gmm_k, -1)
+
+        pi_box = F.softmax(pi_box, dim=1)
+        sigma_box = F.sigmoid(sigma_box)
+
+        bbox_pred = (pi_box * mu_box).sum(dim=1)
         if bbox_pred is not None:
             bboxes = self.bbox_coder.decode(
                 rois[..., 1:], bbox_pred, max_shape=img_shape)
