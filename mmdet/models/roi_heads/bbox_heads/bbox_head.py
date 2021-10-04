@@ -263,9 +263,10 @@ class BBoxHead(BaseModule):
              reduction_override=None):
         losses = dict()
         
-
+        cls_num = 20
         # xishu softmax    fangcha relu
-        box_rep_len = (cls_score.size(1) - 1) * 4
+        box_rep_len = cls_num * 4
+        # box_rep_len = (cls_score.size(1) - 1) * 4
         gmm_k =  bbox_pred.size(1) // (box_rep_len * 3)
         bbox_pred = bbox_pred.view(bbox_pred.size(0), 3, -1)
         mu_box = bbox_pred[:, 0, :].view(bbox_pred.size(0), gmm_k, -1)
@@ -275,9 +276,30 @@ class BBoxHead(BaseModule):
         pi_box = F.softmax(pi_box, dim=1)
         sigma_box = F.sigmoid(sigma_box)
 
+        cls_score = cls_score.view(cls_score.size(0), gmm_k, -1)
+        pi_cls = cls_score[:, :, -1:]
+        mu_cls = cls_score[:, :, :cls_score.size(2) // 2]
+        sigma_cls = cls_score[:, :, cls_score.size(2) // 2:-1]
+        lam_cls = torch.randn(mu_cls.size()).to(mu_cls.device)
+
+        pi_cls = F.softmax(pi_cls, dim=1)
+        sigma_cls = F.sigmoid(sigma_cls)
+
+        
+
         if cls_score is not None:
             avg_factor = max(torch.sum(label_weights > 0).float().item(), 1.)
             if cls_score.numel() > 0:
+                # labels_one_hot = labels.new_zeros(cls_score.size(0), cls_num + 1)
+                # labels_one_hot[labels] = 1
+                # labels = labels[:, None].expand(cls_score.size(0), 4)
+                # cls_p = torch.log(torch.exp(mu_cls).sum(dim=-1))
+                cls_score = mu_cls + torch.sqrt(sigma_cls) * lam_cls
+                cls_score = torch.log((pi_cls.expand(cls_score.size(0), 4, cls_num + 1) * F.softmax(cls_score, dim=1)).sum(dim=1))
+
+
+                # clss = (labels - torch.log(torch.exp(mu_cls).sum(dim=-1)))
+                # loss_cls_ = - (clss * pi_cls.view(clss.size(0), clss.size(1))).sum() / avg_factor
                 loss_cls_ = self.loss_cls(
                     cls_score,
                     labels,
@@ -291,8 +313,8 @@ class BBoxHead(BaseModule):
                 if self.custom_activation:
                     acc_ = self.loss_cls.get_accuracy(cls_score, labels)
                     losses.update(acc_)
-                else:
-                    losses['acc'] = accuracy(cls_score, labels)
+                # else:
+                    # losses['acc'] = accuracy(cls_score, labels)
         if bbox_pred is not None:
             bg_class_ind = self.num_classes
             # 0~self.num_classes-1 are FG, self.num_classes is BG
@@ -333,8 +355,8 @@ class BBoxHead(BaseModule):
                 #     bbox_weights[pos_inds.type(torch.bool)],
                 #     avg_factor=bbox_targets.size(0),
                 #     reduction_override=reduction_override)
-                loss_xy = - torch.log(self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box) + 1e-9) / 2.0
-                losses['loss_bbox'] = (loss_xy * pos_pi_box).sum() / pos_mu_box.size(0)
+                loss_box = - torch.log(self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box) + 1e-9) / 12.0
+                losses['loss_bbox'] = (loss_box * pos_pi_box).sum() / pos_mu_box.size(0)
             else:
                 losses['loss_bbox'] = bbox_pred[pos_inds].sum()
         return losses
@@ -373,17 +395,32 @@ class BBoxHead(BaseModule):
                 Second tensor is the labels with shape (num_boxes, ).
         """
 
+        cls_num = 20
+        # xishu softmax    fangcha relu
+        box_rep_len = cls_num * 4
+        # box_rep_len = (cls_score.size(1) - 1) * 4
+        gmm_k =  bbox_pred.size(1) // (box_rep_len * 3)
+
+        cls_score = cls_score.view(cls_score.size(0), gmm_k, -1)
+        pi_cls = cls_score[:, :, -1:]
+        mu_cls = cls_score[:, :, :cls_score.size(2) // 2]
+        sigma_cls = cls_score[:, :, cls_score.size(2) // 2:-1]
+        lam_cls = torch.randn(mu_cls.size()).to(mu_cls.device)
+
+        pi_cls = F.softmax(pi_cls, dim=1)
+        sigma_cls = F.sigmoid(sigma_cls)
+
         # some loss (Seesaw loss..) may have custom activation
         if self.custom_cls_channels:
             scores = self.loss_cls.get_activation(cls_score)
         else:
-            scores = F.softmax(
-                cls_score, dim=-1) if cls_score is not None else None
+            # scores = F.softmax(
+            #     cls_score, dim=-1) if cls_score is not None else None
+            scores = (pi_cls * F.softmax(
+                mu_cls, dim=-1)).sum(dim=1) if cls_score is not None else None
         # bbox_pred would be None in some detector when with_reg is False,
         # e.g. Grid R-CNN.
 
-        box_rep_len = (cls_score.size(1) - 1) * 4
-        gmm_k =  bbox_pred.size(1) // (box_rep_len * 3)
         bbox_pred = bbox_pred.view(bbox_pred.size(0), 3, -1)
         mu_box = bbox_pred[:, 0, :].view(bbox_pred.size(0), gmm_k, -1)
         sigma_box = bbox_pred[:, 1, :].view(bbox_pred.size(0), gmm_k, -1)
