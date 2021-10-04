@@ -263,7 +263,7 @@ class BBoxHead(BaseModule):
              reduction_override=None):
         losses = dict()
         
-        cls_num = 20
+        cls_num = self.num_classes
         # xishu softmax    fangcha relu
         box_rep_len = cls_num * 4
         # box_rep_len = (cls_score.size(1) - 1) * 4
@@ -395,7 +395,7 @@ class BBoxHead(BaseModule):
                 Second tensor is the labels with shape (num_boxes, ).
         """
 
-        cls_num = 20
+        cls_num = self.num_classes
         # xishu softmax    fangcha relu
         box_rep_len = cls_num * 4
         # box_rep_len = (cls_score.size(1) - 1) * 4
@@ -405,7 +405,6 @@ class BBoxHead(BaseModule):
         pi_cls = cls_score[:, :, -1:]
         mu_cls = cls_score[:, :, :cls_score.size(2) // 2]
         sigma_cls = cls_score[:, :, cls_score.size(2) // 2:-1]
-        lam_cls = torch.randn(mu_cls.size()).to(mu_cls.device)
 
         pi_cls = F.softmax(pi_cls, dim=1)
         sigma_cls = F.sigmoid(sigma_cls)

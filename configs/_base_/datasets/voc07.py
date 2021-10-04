@@ -41,7 +41,8 @@ test_pipeline = [
             dict(type='Normalize', **img_norm_cfg),
             dict(type='Pad', size_divisor=32),
             dict(type='ImageToTensor', keys=['img']),
-            dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels', 'ori_boxes']),
+            dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
+            # dict(type='Collect', keys=['img']),
         ])
 ]
 data = dict(
@@ -62,7 +63,7 @@ data = dict(
         pipeline=val_pipeline),
     test=dict(
         type=dataset_type,
-        ann_file=data_root + 'VOC2012/ImageSets/Main/trainval.txt',
-        img_prefix=data_root + 'VOC2012/',
+        ann_file=data_root + 'VOC2007/ImageSets/Main/trainval.txt',
+        img_prefix=data_root + 'VOC2007/',
         pipeline=test_pipeline))
 evaluation = dict(interval=1, metric='mAP')
