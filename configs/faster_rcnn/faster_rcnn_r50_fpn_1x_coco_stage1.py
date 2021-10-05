@@ -13,7 +13,7 @@ model = dict(
             roi_feat_size=7,
             num_classes=20,
             gmm_k=4,
-            eta=6,
+            eta=12,
             bbox_coder=dict(
                 type='DeltaXYWHBBoxCoder',
                 target_means=[0., 0., 0., 0.],
@@ -26,11 +26,27 @@ model = dict(
         label_type2weight=[1,2,2]
     )
 )
+data_root = 'C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/'
 data = dict(
-    samples_per_gpu=8,
+    samples_per_gpu=16,
     workers_per_gpu=8,
+    train=dict(
+            ann_file=[
+                data_root + 'VOC2007/ImageSets/Main/trainval.txt',
+                # data_root + 'VOC2012/ImageSets/Main/trainval.txt'
+            ],
+            img_prefix=[data_root + 'VOC2007/', data_root + 'VOC2012/'],
+            ),
+            val=dict(
+                ann_file=data_root + 'VOC2007/ImageSets/Main/test.txt',
+                img_prefix=data_root + 'VOC2007/',
+            ),
+            test=dict(
+                ann_file=data_root + 'VOC2012/ImageSets/Main/trainval.txt',
+                img_prefix=data_root + 'VOC2012/',
+            )
 )
-optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001)
 runner = dict(type='EpochBasedRunner', max_epochs=12)
 
 # lr_config = dict(

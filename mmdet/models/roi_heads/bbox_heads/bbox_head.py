@@ -39,6 +39,7 @@ class BBoxHead(BaseModule):
                      loss_weight=1.0),
                  loss_bbox=dict(
                      type='SmoothL1Loss', beta=1.0, loss_weight=1.0),
+                 eta=12,
                  init_cfg=None):
         super(BBoxHead, self).__init__(init_cfg)
         assert with_cls or with_reg
@@ -54,6 +55,7 @@ class BBoxHead(BaseModule):
         self.reg_predictor_cfg = reg_predictor_cfg
         self.cls_predictor_cfg = cls_predictor_cfg
         self.fp16_enabled = False
+        self.eta = eta
 
         self.bbox_coder = build_bbox_coder(bbox_coder)
         self.loss_cls = build_loss(loss_cls)
@@ -355,7 +357,7 @@ class BBoxHead(BaseModule):
                 #     bbox_weights[pos_inds.type(torch.bool)],
                 #     avg_factor=bbox_targets.size(0),
                 #     reduction_override=reduction_override)
-                loss_box = - torch.log(self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box) + 1e-9) / 12.0
+                loss_box = - torch.log(self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box) + 1e-9) / self.eta
                 losses['loss_bbox'] = (loss_box * pos_pi_box).sum() / pos_mu_box.size(0)
             else:
                 losses['loss_bbox'] = bbox_pred[pos_inds].sum()

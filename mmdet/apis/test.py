@@ -31,7 +31,7 @@ def single_gpu_test(model,
                     data_loader,
                     show=False,
                     out_dir=None,
-                    show_score_thr=0.9,
+                    show_score_thr=0.7,
                     ):
     dy_th=[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
                0.5, 0.7, 0.5, 0.5, 0.5, 0.5,
@@ -406,15 +406,15 @@ def gen_voc_label(data, result, tags, boxes, ori_boxes, pseudo_th=0.9):
                 xmax.appendChild(xmaxnum)
                 ymax.appendChild(ymaxnum)
                 score.appendChild(scorenum)
-        # f = open(os.path.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit', os.path.join(d.data[0][0]['filename'].split('/')[7],
-        #                                                      os.path.join('Annotations',
-        #                                                                   d.data[0][0][
-        #                                                                       'ori_filename'].split(
-        #                                                                       '\\')[1].split('.')[
-        #                                                                       0] + '.xml'))),
-        #          "w")
-        # f.write(doc.toprettyxml(indent="  "))
-        # f.close()
+        f = open(os.path.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit', os.path.join(d.data[0][0]['filename'].split('/')[7],
+                                                             os.path.join('Annotations',
+                                                                          d.data[0][0][
+                                                                              'ori_filename'].split(
+                                                                              '\\')[1].split('.')[
+                                                                              0] + '.xml'))),
+                 "w")
+        f.write(doc.toprettyxml(indent="  "))
+        f.close()
     return add_num, pseudo_num
 
 
