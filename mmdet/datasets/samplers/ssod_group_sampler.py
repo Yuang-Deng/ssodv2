@@ -197,8 +197,8 @@ class SSODDistributedGroupSampler(Sampler):
         g.manual_seed(self.epoch + self.seed)
 
         indices = []
-        self.num_samples = 0
         if len(self.group_sizes) == 4:
+            self.num_samples = 0
             samples = self.samples_per_gpu // 2
             
             # labeled_size_hori = self.group_sizes[0]
