@@ -31,7 +31,7 @@ def single_gpu_test(model,
                     data_loader,
                     show=False,
                     out_dir=None,
-                    show_score_thr=0.9,
+                    show_score_thr=0.7,
                     ):
     dy_th=[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
                0.5, 0.7, 0.5, 0.5, 0.5, 0.5,
@@ -50,7 +50,7 @@ def single_gpu_test(model,
         if 'gt_labels' in data.keys():
             tags = data.pop('gt_labels')
             box = data.pop('gt_bboxes')
-            ori_box = data.pop('ori_boxes')
+            # ori_box = data.pop('ori_boxes')
             flag = True
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
@@ -77,11 +77,11 @@ def single_gpu_test(model,
                 # nms_cfg = {'type': 'nms', 'iou_threshold': 0.5}
                 # multiclass_nms(boxfornms, labelfornms, show_score_thr - 0.11, nms_cfg,
                 #                                     100)
-                cur_add_num, cur_pseudo_num = gen_voc_label(data, result, tags, box, ori_box, dy_th)
-                for i in range(len(cur_add_num)):
-                    add_num[i] += cur_add_num[i]
-                for i in range(len(cur_pseudo_num)):
-                    pseudo_num[i] += cur_pseudo_num[i]
+                cur_add_num, cur_pseudo_num = gen_voc_label(data, result, tags, box, box, [show_score_thr] * len(VOC_CLASSES))
+                # for i in range(len(cur_add_num)):
+                #     add_num[i] += cur_add_num[i]
+                # for i in range(len(cur_pseudo_num)):
+                #     pseudo_num[i] += cur_pseudo_num[i]
                 # for k, v in cur_add_num.items():
                 #     k = k.item()
                 #     if k not in add_num.keys():
@@ -96,13 +96,13 @@ def single_gpu_test(model,
         add_boxes = 0
         # for i in range(len(result[0])):
         #     result[0][i] = np.zeros([0,5])
-        for b, t in zip(ori_box[0], tags[0]):
-            for bb,tt in zip(b,t):
+        # for b, t in zip(ori_box[0], tags[0]):
+        #     for bb,tt in zip(b,t):
                 # k_t = tt.item()
                 # if k_t not in ori_num.keys():
                 #     ori_num[k_t] = 0
-                ori_num[tt.item()] += 1
-                bb = bb.numpy()
+                # ori_num[tt.item()] += 1
+                # bb = bb.numpy()
                 # flag = True
                 # for r in result[0]:
                 #     for rb in r:
@@ -113,7 +113,7 @@ def single_gpu_test(model,
                 #     zero = np.ones([1])
                 #     add_b = np.concatenate([bb, zero])
                 #     result[0][0] = np.concatenate([result[0][0], add_b[None,:]])
-        print(add_boxes)
+        # print(add_boxes)
         add_num_local += add_boxes
         if show or out_dir:
             if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
@@ -151,10 +151,10 @@ def single_gpu_test(model,
 
         for _ in range(batch_size):
             prog_bar.update()
-    print()
-    print(add_num)
-    print(pseudo_num)
-    print(ori_num)
+    # print()
+    # print(add_num)
+    # print(pseudo_num)
+    # print(ori_num)
     return results
 
 
@@ -318,55 +318,56 @@ def gen_voc_label(data, result, tags, boxes, ori_boxes, pseudo_th=0.9):
             tagname = doc.createTextNode(VOC_CLASSES[t])
             tag.appendChild(tagname)
             annotation.appendChild(tag)
-        for b, t in zip(ori_box[0], tags_img[0]):
-            b = b.numpy()
-            point = doc.createElement("point")
-            point_x = doc.createElement("point_x")
-            point_y = doc.createElement("point_y")
-            x = doc.createTextNode(str(((b[0] + b[2]) / 2))[7:-1])
-            y = doc.createTextNode(str(((b[1] + b[3]) / 2))[7:-1])
-            point_x.appendChild(x)
-            point_y.appendChild(y)
-            point.appendChild(point_x)
-            point.appendChild(point_y)
-            annotation.appendChild(point)
-            flag = True
-            for ridx in range(len(r)):
-                for r_box in r[ridx]:
-                    if cal_iou(b,r_box[:4]) > 0.3 and r_box[4] > pseudo_th[ridx]:
-                        flag = False
-            if flag:
-                add_num[t.item()] += 1
-                objectt = doc.createElement("object")
-                annotation.appendChild(objectt)
-                bndbox = doc.createElement("bndbox")
-                objectt.appendChild(bndbox)
-                xmin = doc.createElement("xmin")
-                ymin = doc.createElement("ymin")
-                xmax = doc.createElement("xmax")
-                ymax = doc.createElement("ymax")
-                score = doc.createElement("score")
-                calss = doc.createElement("name")
-                objectt.appendChild(calss)
-                calss.appendChild(doc.createTextNode(VOC_CLASSES[t]))
-                bndbox.appendChild(xmin)
-                bndbox.appendChild(ymin)
-                bndbox.appendChild(xmax)
-                bndbox.appendChild(ymax)
-                bndbox.appendChild(score)
-                difficult = doc.createElement("difficult")
-                difficult.appendChild(doc.createTextNode('0'))
-                objectt.appendChild(difficult)
-                xminnum = doc.createTextNode(str(b[0]))
-                yminnum = doc.createTextNode(str(b[1]))
-                xmaxnum = doc.createTextNode(str(b[2]))
-                ymaxnum = doc.createTextNode(str(b[3]))
-                scorenum = doc.createTextNode(str(1))
-                xmin.appendChild(xminnum)
-                ymin.appendChild(yminnum)
-                xmax.appendChild(xmaxnum)
-                ymax.appendChild(ymaxnum)
-                score.appendChild(scorenum)
+        # 补框代码
+        # for b, t in zip(ori_box[0], tags_img[0]):
+        #     b = b.numpy()
+        #     point = doc.createElement("point")
+        #     point_x = doc.createElement("point_x")
+        #     point_y = doc.createElement("point_y")
+        #     x = doc.createTextNode(str(((b[0] + b[2]) / 2))[7:-1])
+        #     y = doc.createTextNode(str(((b[1] + b[3]) / 2))[7:-1])
+        #     point_x.appendChild(x)
+        #     point_y.appendChild(y)
+        #     point.appendChild(point_x)
+        #     point.appendChild(point_y)
+        #     annotation.appendChild(point)
+        #     flag = True
+        #     for ridx in range(len(r)):
+        #         for r_box in r[ridx]:
+        #             if cal_iou(b,r_box[:4]) > 0.3 and r_box[4] > pseudo_th[ridx]:
+        #                 flag = False
+        #     if flag:
+        #         add_num[t.item()] += 1
+        #         objectt = doc.createElement("object")
+        #         annotation.appendChild(objectt)
+        #         bndbox = doc.createElement("bndbox")
+        #         objectt.appendChild(bndbox)
+        #         xmin = doc.createElement("xmin")
+        #         ymin = doc.createElement("ymin")
+        #         xmax = doc.createElement("xmax")
+        #         ymax = doc.createElement("ymax")
+        #         score = doc.createElement("score")
+        #         calss = doc.createElement("name")
+        #         objectt.appendChild(calss)
+        #         calss.appendChild(doc.createTextNode(VOC_CLASSES[t]))
+        #         bndbox.appendChild(xmin)
+        #         bndbox.appendChild(ymin)
+        #         bndbox.appendChild(xmax)
+        #         bndbox.appendChild(ymax)
+        #         bndbox.appendChild(score)
+        #         difficult = doc.createElement("difficult")
+        #         difficult.appendChild(doc.createTextNode('0'))
+        #         objectt.appendChild(difficult)
+        #         xminnum = doc.createTextNode(str(b[0]))
+        #         yminnum = doc.createTextNode(str(b[1]))
+        #         xmaxnum = doc.createTextNode(str(b[2]))
+        #         ymaxnum = doc.createTextNode(str(b[3]))
+        #         scorenum = doc.createTextNode(str(1))
+        #         xmin.appendChild(xminnum)
+        #         ymin.appendChild(yminnum)
+        #         xmax.appendChild(xmaxnum)
+        #         ymax.appendChild(ymaxnum)
+        #         score.appendChild(scorenum)
         for ridx in range(len(r)):
             classname = VOC_CLASSES[ridx]
             for box in r[ridx]:
@@ -405,15 +406,15 @@ def gen_voc_label(data, result, tags, boxes, ori_boxes, pseudo_th=0.9):
                 xmax.appendChild(xmaxnum)
                 ymax.appendChild(ymaxnum)
                 score.appendChild(scorenum)
-        # f = open(os.path.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit', os.path.join(d.data[0][0]['filename'].split('/')[7],
-        #                                                      os.path.join('Annotations',
-        #                                                                   d.data[0][0][
-        #                                                                       'ori_filename'].split(
-        #                                                                       '\\')[1].split('.')[
-        #                                                                       0] + '.xml'))),
-        #          "w")
-        # f.write(doc.toprettyxml(indent="  "))
-        # f.close()
+        f = open(os.path.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit', os.path.join(d.data[0][0]['filename'].split('/')[7],
+                                                             os.path.join('Annotations',
+                                                                          d.data[0][0][
+                                                                              'ori_filename'].split(
+                                                                              '\\')[1].split('.')[
+                                                                              0] + '.xml'))),
+                 "w")
+        f.write(doc.toprettyxml(indent="  "))
+        f.close()
     return add_num, pseudo_num
 
 

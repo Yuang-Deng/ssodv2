@@ -13,7 +13,7 @@ train_pipeline = [
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
 ]
-test_pipeline = [
+val_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(
         type='MultiScaleFlipAug',
@@ -28,6 +28,22 @@ test_pipeline = [
             dict(type='Collect', keys=['img']),
         ])
 ]
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadAnnotations', with_bbox=True),
+    dict(
+        type='MultiScaleFlipAug',
+        img_scale=(1000, 600),
+        flip=False,
+        transforms=[
+            dict(type='Resize', keep_ratio=True),
+            dict(type='RandomFlip'),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='Pad', size_divisor=32),
+            dict(type='ImageToTensor', keys=['img']),
+            dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
+        ])
+]
 data = dict(
     samples_per_gpu=16,
     workers_per_gpu=0,
@@ -38,15 +54,16 @@ data = dict(
                 data_root + 'VOC2012/ImageSets/Main/trainval.txt'
             ],
             img_prefix=[data_root + 'VOC2007/', data_root + 'VOC2012/'],
+            label_type=[0, 1],
             pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
         ann_file=data_root + 'VOC2007/ImageSets/Main/test.txt',
         img_prefix=data_root + 'VOC2007/',
-        pipeline=test_pipeline),
+        pipeline=val_pipeline),
     test=dict(
         type=dataset_type,
-        ann_file=data_root + 'VOC2012/ImageSets/Main/test.txt',
+        ann_file=data_root + 'VOC2012/ImageSets/Main/trainval.txt',
         img_prefix=data_root + 'VOC2012/',
         pipeline=test_pipeline))
 evaluation = dict(interval=1, metric='mAP')

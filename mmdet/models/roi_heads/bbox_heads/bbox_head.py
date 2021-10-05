@@ -39,6 +39,7 @@ class BBoxHead(BaseModule):
                      loss_weight=1.0),
                  loss_bbox=dict(
                      type='SmoothL1Loss', beta=1.0, loss_weight=1.0),
+                 eta=12,
                  init_cfg=None):
         super(BBoxHead, self).__init__(init_cfg)
         assert with_cls or with_reg
@@ -54,6 +55,7 @@ class BBoxHead(BaseModule):
         self.reg_predictor_cfg = reg_predictor_cfg
         self.cls_predictor_cfg = cls_predictor_cfg
         self.fp16_enabled = False
+        self.eta = eta
 
         self.bbox_coder = build_bbox_coder(bbox_coder)
         self.loss_cls = build_loss(loss_cls)
@@ -263,7 +265,7 @@ class BBoxHead(BaseModule):
              reduction_override=None):
         losses = dict()
         
-        cls_num = 20
+        cls_num = self.num_classes
         # xishu softmax    fangcha relu
         box_rep_len = cls_num * 4
         # box_rep_len = (cls_score.size(1) - 1) * 4
@@ -355,7 +357,7 @@ class BBoxHead(BaseModule):
                 #     bbox_weights[pos_inds.type(torch.bool)],
                 #     avg_factor=bbox_targets.size(0),
                 #     reduction_override=reduction_override)
-                loss_box = - torch.log(self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box) + 1e-9) / 12.0
+                loss_box = - torch.log(self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box) + 1e-9) / self.eta
                 losses['loss_bbox'] = (loss_box * pos_pi_box).sum() / pos_mu_box.size(0)
             else:
                 losses['loss_bbox'] = bbox_pred[pos_inds].sum()
@@ -395,7 +397,7 @@ class BBoxHead(BaseModule):
                 Second tensor is the labels with shape (num_boxes, ).
         """
 
-        cls_num = 20
+        cls_num = self.num_classes
         # xishu softmax    fangcha relu
         box_rep_len = cls_num * 4
         # box_rep_len = (cls_score.size(1) - 1) * 4
@@ -405,7 +407,6 @@ class BBoxHead(BaseModule):
         pi_cls = cls_score[:, :, -1:]
         mu_cls = cls_score[:, :, :cls_score.size(2) // 2]
         sigma_cls = cls_score[:, :, cls_score.size(2) // 2:-1]
-        lam_cls = torch.randn(mu_cls.size()).to(mu_cls.device)
 
         pi_cls = F.softmax(pi_cls, dim=1)
         sigma_cls = F.sigmoid(sigma_cls)
