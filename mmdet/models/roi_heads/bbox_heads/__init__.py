@@ -6,11 +6,12 @@ from .dii_head import DIIHead
 from .double_bbox_head import DoubleConvFCBBoxHead
 from .sabl_head import SABLHead
 from .scnet_bbox_head import SCNetBBoxHead
-from .gmm_bbox_head import GMMConvFCBBoxHead, GMMShared2FCBBoxHead, GMMShared4Conv1FCBBoxHead
+from .gmm_bbox_head import GMMBBoxHead
+from .gmm_convfc_bbox_head import GMMConvFCBBoxHead, GMMShared2FCBBoxHead, GMMShared4Conv1FCBBoxHead
 
 __all__ = [
     'BBoxHead', 'ConvFCBBoxHead', 'Shared2FCBBoxHead',
     'Shared4Conv1FCBBoxHead', 'DoubleConvFCBBoxHead', 'SABLHead', 'DIIHead',
     'SCNetBBoxHead', 'GMMConvFCBBoxHead', 'GMMShared2FCBBoxHead',
-    'GMMShared4Conv1FCBBoxHead'
+    'GMMShared4Conv1FCBBoxHead', 'GMMBBoxHead'
 ]
