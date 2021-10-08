@@ -6,7 +6,7 @@ from mmcv.runner import BaseModule, auto_fp16, force_fp32
 from torch.nn.modules.utils import _pair
 import numpy as np
 
-from mmdet.core import build_bbox_coder, multi_apply, multiclass_nms
+from mmdet.core import build_bbox_coder, multi_apply, multiclass_nms, unc_multiclass_nms
 from mmdet.models.builder import HEADS, build_loss
 from mmdet.models.losses import accuracy
 from mmdet.models.utils import build_linear_layer
@@ -41,7 +41,7 @@ class GMMBBoxHead(BaseModule):
                      type='SmoothL1Loss', beta=1.0, loss_weight=1.0),
                  eta=12,
                  init_cfg=None):
-        super(BBoxHead, self).__init__(init_cfg)
+        super(GMMBBoxHead, self).__init__(init_cfg)
         assert with_cls or with_reg
         self.with_avg_pool = with_avg_pool
         self.with_cls = with_cls
@@ -371,7 +371,7 @@ class GMMBBoxHead(BaseModule):
                    img_shape,
                    scale_factor,
                    rescale=False,
-                   cfg=None):
+                   cfg=None,):
         """Transform network output for a batch into bbox predictions.
 
         Args:
@@ -411,6 +411,12 @@ class GMMBBoxHead(BaseModule):
         pi_cls = F.softmax(pi_cls, dim=1)
         sigma_cls = F.sigmoid(sigma_cls)
 
+        mu_al_cls = (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * sigma_cls).sum(dim=1)
+        # pow = torch.pow(mu_cls - (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * mu_cls).sum(dim=1)[:, None, :].expand(cls_score.size(0), 
+        #                 gmm_k, sigma_cls.size(2)), 2)
+        mu_ep_cls = (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * torch.pow(mu_cls - (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * mu_cls).sum(dim=1)[:, None, :].expand(cls_score.size(0), 
+                        gmm_k, sigma_cls.size(2)), 2)).sum(dim=1)
+
         # some loss (Seesaw loss..) may have custom activation
         if self.custom_cls_channels:
             scores = self.loss_cls.get_activation(cls_score)
@@ -429,6 +435,10 @@ class GMMBBoxHead(BaseModule):
 
         pi_box = F.softmax(pi_box, dim=1)
         sigma_box = F.sigmoid(sigma_box)
+
+        mu_al_box = (pi_box * sigma_box).sum(dim=1)
+        mu_ep_box = (pi_box * torch.pow(mu_box - (pi_box * mu_box).sum(dim=1)[:, None, :].expand(bbox_pred.size(0), 
+                        gmm_k, mu_box.size(2)), 2)).sum(dim=1)
 
         bbox_pred = (pi_box * mu_box).sum(dim=1)
         if bbox_pred is not None:
@@ -449,12 +459,18 @@ class GMMBBoxHead(BaseModule):
         if cfg is None:
             return bboxes, scores
         else:
-            
-            det_bboxes, det_labels = multiclass_nms(bboxes, scores,
+            det_bboxes, det_labels, mu_al_box, mu_ep_box, mu_al_cls, mu_ep_cls = unc_multiclass_nms(bboxes, scores,
+                                                    mu_al_box, mu_ep_box,
+                                                    mu_al_cls, mu_ep_cls,
                                                     cfg.score_thr, cfg.nms,
                                                     cfg.max_per_img)
-
-            return det_bboxes, det_labels
+            # det_bboxes, det_labels = multiclass_nms(bboxes, scores,
+            #                                         cfg.score_thr, cfg.nms,
+            #                                         cfg.max_per_img)
+            if 'return_unc' in cfg.keys() and cfg.return_unc == True:
+                return det_bboxes, det_labels, mu_al_box, mu_ep_box, mu_al_cls, mu_ep_cls
+            else:
+                return det_bboxes, det_labels
 
     @force_fp32(apply_to=('bbox_preds', ))
     def refine_bboxes(self, rois, labels, bbox_preds, pos_is_gts, img_metas):
