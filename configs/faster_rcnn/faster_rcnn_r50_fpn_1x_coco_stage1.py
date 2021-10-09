@@ -14,6 +14,7 @@ model = dict(
             num_classes=20,
             gmm_k=4,
             eta=12,
+            cls_lambda=256,
             bbox_coder=dict(
                 type='DeltaXYWHBBoxCoder',
                 target_means=[0., 0., 0., 0.],

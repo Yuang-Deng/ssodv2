@@ -40,6 +40,7 @@ class GMMBBoxHead(BaseModule):
                  loss_bbox=dict(
                      type='SmoothL1Loss', beta=1.0, loss_weight=1.0),
                  eta=12,
+                 cls_lambda=256,
                  init_cfg=None):
         super(GMMBBoxHead, self).__init__(init_cfg)
         assert with_cls or with_reg
@@ -56,6 +57,7 @@ class GMMBBoxHead(BaseModule):
         self.cls_predictor_cfg = cls_predictor_cfg
         self.fp16_enabled = False
         self.eta = eta
+        self.cls_lambda = cls_lambda
 
         self.bbox_coder = build_bbox_coder(bbox_coder)
         self.loss_cls = build_loss(loss_cls)
@@ -295,38 +297,6 @@ class GMMBBoxHead(BaseModule):
         pi_cls = F.softmax(pi_cls, dim=1)
         sigma_cls = F.sigmoid(sigma_cls)
 
-        
-
-        if cls_score is not None:
-            avg_factor = max(torch.sum(label_weights > 0).float().item(), 1.)
-            if cls_score.numel() > 0:
-                # labels_one_hot = labels.new_zeros(cls_score.size(0), cls_num + 1)
-                # labels_one_hot[labels] = 1
-                # labels = labels[:, None].expand(cls_score.size(0), 4)
-                # cls_p = torch.log(torch.exp(mu_cls).sum(dim=-1))
-                cls_score = mu_cls + torch.sqrt(sigma_cls) * lam_cls
-                cls_score = torch.log((pi_cls.expand(cls_score.size(0), gmm_k, cls_num + 1) * F.softmax(cls_score, dim=1)).sum(dim=1))
-                one_hot_label = self.gen_one_hot_label(self.num_classes, labels, cls_score.device)
-                
-                loss_cls_ = - (one_hot_label * cls_score).sum() / avg_factor
-
-                # clss = (labels - torch.log(torch.exp(mu_cls).sum(dim=-1)))
-                # loss_cls_ = - (clss * pi_cls.view(clss.size(0), clss.size(1))).sum() / avg_factor
-                # loss_cls_ = self.loss_cls(
-                #     cls_score,
-                #     labels,
-                #     label_weights,
-                #     avg_factor=avg_factor,
-                #     reduction_override=reduction_override)
-                if isinstance(loss_cls_, dict):
-                    losses.update(loss_cls_)
-                else:
-                    losses['loss_cls'] = loss_cls_
-                if self.custom_activation:
-                    acc_ = self.loss_cls.get_accuracy(cls_score, labels)
-                    losses.update(acc_)
-                # else:
-                    # losses['acc'] = accuracy(cls_score, labels)
         if bbox_pred is not None:
             bg_class_ind = self.num_classes
             # 0~self.num_classes-1 are FG, self.num_classes is BG
@@ -371,6 +341,37 @@ class GMMBBoxHead(BaseModule):
                 losses['loss_bbox'] = (loss_box * pos_pi_box).sum() / pos_mu_box.size(0)
             else:
                 losses['loss_bbox'] = bbox_pred[pos_inds].sum()
+        
+        if cls_score is not None:
+            avg_factor = max(torch.sum(label_weights > 0).float().item(), 1.)
+            if cls_score.numel() > 0:
+                # labels_one_hot = labels.new_zeros(cls_score.size(0), cls_num + 1)
+                # labels_one_hot[labels] = 1
+                # labels = labels[:, None].expand(cls_score.size(0), 4)
+                # cls_p = torch.log(torch.exp(mu_cls).sum(dim=-1))
+                cls_score = mu_cls + torch.sqrt(sigma_cls) * lam_cls
+                cls_score = torch.log((pi_cls.expand(cls_score.size(0), gmm_k, cls_num + 1) * F.softmax(cls_score, dim=1)).sum(dim=1))
+                one_hot_label = self.gen_one_hot_label(self.num_classes, labels, cls_score.device)
+                
+                loss_cls_ = - ((one_hot_label * cls_score).sum() / avg_factor) * self.cls_lambda
+
+                # clss = (labels - torch.log(torch.exp(mu_cls).sum(dim=-1)))
+                # loss_cls_ = - (clss * pi_cls.view(clss.size(0), clss.size(1))).sum() / avg_factor
+                # loss_cls_ = self.loss_cls(
+                #     cls_score,
+                #     labels,
+                #     label_weights,
+                #     avg_factor=avg_factor,
+                #     reduction_override=reduction_override)
+                if isinstance(loss_cls_, dict):
+                    losses.update(loss_cls_)
+                else:
+                    losses['loss_cls'] = loss_cls_
+                if self.custom_activation:
+                    acc_ = self.loss_cls.get_accuracy(cls_score, labels)
+                    losses.update(acc_)
+                # else:
+                    # losses['acc'] = accuracy(cls_score, labels)
         return losses
 
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
