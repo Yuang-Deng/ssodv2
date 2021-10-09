@@ -41,7 +41,7 @@ class GMMBBoxHead(BaseModule):
                      type='SmoothL1Loss', beta=1.0, loss_weight=1.0),
                  eta=12,
                  init_cfg=None):
-        super(BBoxHead, self).__init__(init_cfg)
+        super(GMMBBoxHead, self).__init__(init_cfg)
         assert with_cls or with_reg
         self.with_avg_pool = with_avg_pool
         self.with_cls = with_cls
@@ -252,6 +252,14 @@ class GMMBBoxHead(BaseModule):
 
     def _gaussian_dist_pdf(self, val, mean, var):
         return torch.exp(- (val - mean) ** 2.0 / var / 2.0) / torch.sqrt(2.0 * np.pi * var)
+    
+    def gen_one_hot_label(self, num_classes, labels, device):
+        one_hot_label = torch.zeros(labels.size(0), num_classes + 1).to(device)
+        # index = torch.arange(0, labels.size(0), 1).to(device)
+        # index = torch.cat([index[:, None], labels[:, None]], dim=-1)
+        # one_hot_label[index] = 1
+        one_hot_label.scatter_(1, labels[:, None], 1)
+        return one_hot_label
 
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
     def loss(self,
@@ -298,16 +306,18 @@ class GMMBBoxHead(BaseModule):
                 # cls_p = torch.log(torch.exp(mu_cls).sum(dim=-1))
                 cls_score = mu_cls + torch.sqrt(sigma_cls) * lam_cls
                 cls_score = torch.log((pi_cls.expand(cls_score.size(0), gmm_k, cls_num + 1) * F.softmax(cls_score, dim=1)).sum(dim=1))
-
+                one_hot_label = self.gen_one_hot_label(self.num_classes, labels, cls_score.device)
+                
+                loss_cls_ = - (one_hot_label * cls_score).sum() / avg_factor
 
                 # clss = (labels - torch.log(torch.exp(mu_cls).sum(dim=-1)))
                 # loss_cls_ = - (clss * pi_cls.view(clss.size(0), clss.size(1))).sum() / avg_factor
-                loss_cls_ = self.loss_cls(
-                    cls_score,
-                    labels,
-                    label_weights,
-                    avg_factor=avg_factor,
-                    reduction_override=reduction_override)
+                # loss_cls_ = self.loss_cls(
+                #     cls_score,
+                #     labels,
+                #     label_weights,
+                #     avg_factor=avg_factor,
+                #     reduction_override=reduction_override)
                 if isinstance(loss_cls_, dict):
                     losses.update(loss_cls_)
                 else:
