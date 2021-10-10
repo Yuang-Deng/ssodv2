@@ -327,16 +327,6 @@ class GMMBBoxHead(BaseModule):
                            labels[pos_inds.type(torch.bool)]]
                     pos_target = bbox_targets[pos_inds.type(torch.bool)]
                     pos_target = pos_target[:, None, :].expand(pos_target.size(0), gmm_k, pos_target.size(1))
-                    # pos_bbox_pred = bbox_pred.view(
-                    #     bbox_pred.size(0), -1,
-                    #     4)[pos_inds.type(torch.bool),
-                    #        labels[pos_inds.type(torch.bool)]]
-                # losses['loss_bbox'] = self.loss_bbox(
-                #     pos_bbox_pred,
-                #     bbox_targets[pos_inds.type(torch.bool)],
-                #     bbox_weights[pos_inds.type(torch.bool)],
-                #     avg_factor=bbox_targets.size(0),
-                #     reduction_override=reduction_override)
                 loss_box = - torch.log(self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box) + 1e-9) / self.eta
                 losses['loss_bbox'] = (loss_box * pos_pi_box).sum() / pos_mu_box.size(0)
             else:
@@ -350,10 +340,15 @@ class GMMBBoxHead(BaseModule):
                 # labels = labels[:, None].expand(cls_score.size(0), 4)
                 # cls_p = torch.log(torch.exp(mu_cls).sum(dim=-1))
                 cls_score = mu_cls + torch.sqrt(sigma_cls) * lam_cls
-                cls_score = torch.log((pi_cls.expand(cls_score.size(0), gmm_k, cls_num + 1) * F.softmax(cls_score, dim=1)).sum(dim=1))
-                one_hot_label = self.gen_one_hot_label(self.num_classes, labels, cls_score.device)
+
+                inds = torch.arange(0, cls_score.size(0), 1)
+                gt_score = cls_score[inds, :, labels[inds]]
+                loss_cls_ = - (pi_cls.view(pi_cls.size(0), pi_cls.size(1)) * (gt_score - torch.log(torch.exp(cls_score).sum(dim=-1)))).sum() / avg_factor
                 
-                loss_cls_ = - ((one_hot_label * cls_score).sum() / avg_factor) * self.cls_lambda
+                # cls_score = torch.log((pi_cls.expand(cls_score.size(0), gmm_k, cls_num + 1) * F.softmax(cls_score, dim=1)).sum(dim=1))
+                # one_hot_label = self.gen_one_hot_label(self.num_classes, labels, cls_score.device)
+                
+                # loss_cls_ = - ((one_hot_label * cls_score).sum() / avg_factor) * self.cls_lambda
 
                 # clss = (labels - torch.log(torch.exp(mu_cls).sum(dim=-1)))
                 # loss_cls_ = - (clss * pi_cls.view(clss.size(0), clss.size(1))).sum() / avg_factor
