@@ -150,11 +150,11 @@ class TwoStageDetector(BaseDetector):
         # losses.update(roi_losses)
 
         # return losses
-        if '_' not in img_metas[-1]['ori_filename']:
-            return self._stage1_forward_train(img, img_metas, gt_bboxes, gt_labels, gt_bboxes_ignore,
+        if '_' not in img_metas[0]['ori_filename'] and '_' in img_metas[-1]['ori_filename']:
+            return self._stage2_forward_train(img, img_metas, gt_bboxes, gt_labels, gt_bboxes_ignore,
                          gt_masks, proposals, **kwargs)
         else:
-            return self._stage2_forward_train(img, img_metas, gt_bboxes, gt_labels, gt_bboxes_ignore,
+            return self._stage1_forward_train(img, img_metas, gt_bboxes, gt_labels, gt_bboxes_ignore,
                          gt_masks, proposals, **kwargs)
 
     def _stage1_forward_train(self,
@@ -240,10 +240,15 @@ class TwoStageDetector(BaseDetector):
                                                  label_gt_bboxes, label_gt_labels,
                                                  gt_bboxes_ignore, gt_masks,
                                                  **kwargs)
-        roi_losses = self.roi_head.forward_train(unlabel_x, unlabel_img_metas, un_proposal_list,
+        un_roi_losses = self.roi_head.forward_train(unlabel_x, unlabel_img_metas, un_proposal_list,
                                                  unlabel_gt_bboxes, unlabel_gt_labels,
                                                  gt_bboxes_ignore, gt_masks,
                                                  **kwargs)
+        for k in rpn_losses.keys():
+            if k == 'acc':
+                roi_losses[k] += un_roi_losses[k]
+                roi_losses[k] /= 2
+            roi_losses[k] += un_roi_losses[k] * label_type2weight[1]
         losses.update(roi_losses)
 
         return losses

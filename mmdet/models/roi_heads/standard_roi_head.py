@@ -249,21 +249,38 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         """
         assert self.with_bbox, 'Bbox head must be implemented.'
 
-        det_bboxes, det_labels = self.simple_test_bboxes(
-            x, img_metas, proposal_list, self.test_cfg, rescale=rescale)
+        if 'return_unc' in self.test_cfg.keys() and self.test_cfg['return_unc'] == True:
+            det_bboxes, det_labels, mu_al_boxes, mu_ep_boxes, mu_al_clses, mu_ep_clses = self.simple_test_bboxes(
+                x, img_metas, proposal_list, self.test_cfg, rescale=rescale)
 
-        bbox_results = [
-            bbox2result(det_bboxes[i], det_labels[i],
-                        self.bbox_head.num_classes)
-            for i in range(len(det_bboxes))
-        ]
+            bbox_results = [
+                bbox2result(det_bboxes[i], det_labels[i],
+                            self.bbox_head.num_classes)
+                for i in range(len(det_bboxes))
+            ]
 
-        if not self.with_mask:
-            return bbox_results
+            if not self.with_mask:
+                return bbox_results, det_bboxes, det_labels, mu_al_boxes, mu_ep_boxes, mu_al_clses, mu_ep_clses
+            else:
+                segm_results = self.simple_test_mask(
+                    x, img_metas, det_bboxes, det_labels, rescale=rescale)
+                return list(zip(bbox_results, segm_results))
         else:
-            segm_results = self.simple_test_mask(
-                x, img_metas, det_bboxes, det_labels, rescale=rescale)
-            return list(zip(bbox_results, segm_results))
+            det_bboxes, det_labels = self.simple_test_bboxes(
+                x, img_metas, proposal_list, self.test_cfg, rescale=rescale)
+
+            bbox_results = [
+                bbox2result(det_bboxes[i], det_labels[i],
+                            self.bbox_head.num_classes)
+                for i in range(len(det_bboxes))
+            ]
+
+            if not self.with_mask:
+                return bbox_results
+            else:
+                segm_results = self.simple_test_mask(
+                    x, img_metas, det_bboxes, det_labels, rescale=rescale)
+                return list(zip(bbox_results, segm_results))
 
     def aug_test(self, x, proposal_list, img_metas, rescale=False):
         """Test with augmentations.

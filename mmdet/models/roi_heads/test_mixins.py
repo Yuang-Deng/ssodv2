@@ -110,30 +110,64 @@ class BBoxTestMixin:
             bbox_pred = (None, ) * len(proposals)
 
         # apply bbox post-processing to each image individually
-        det_bboxes = []
-        det_labels = []
-        for i in range(len(proposals)):
-            if rois[i].shape[0] == 0:
-                # There is no proposal in the single image
-                det_bbox = rois[i].new_zeros(0, 5)
-                det_label = rois[i].new_zeros((0, ), dtype=torch.long)
-                if rcnn_test_cfg is None:
-                    det_bbox = det_bbox[:, :4]
-                    det_label = rois[i].new_zeros(
-                        (0, self.bbox_head.fc_cls.out_features))
+        if 'return_unc' in rcnn_test_cfg.keys() and rcnn_test_cfg.return_unc == True:
+            det_bboxes = []
+            det_labels = []
+            mu_al_boxes = []
+            mu_ep_boxes = []
+            mu_al_clses = []
+            mu_ep_clses = []
+            for i in range(len(proposals)):
+                if rois[i].shape[0] == 0:
+                    # There is no proposal in the single image
+                    det_bbox = rois[i].new_zeros(0, 5)
+                    det_label = rois[i].new_zeros((0, ), dtype=torch.long)
+                    if rcnn_test_cfg is None:
+                        det_bbox = det_bbox[:, :4]
+                        det_label = rois[i].new_zeros(
+                            (0, self.bbox_head.fc_cls.out_features))
 
-            else:
-                det_bbox, det_label = self.bbox_head.get_bboxes(
-                    rois[i],
-                    cls_score[i],
-                    bbox_pred[i],
-                    img_shapes[i],
-                    scale_factors[i],
-                    rescale=rescale,
-                    cfg=rcnn_test_cfg)
-            det_bboxes.append(det_bbox)
-            det_labels.append(det_label)
-        return det_bboxes, det_labels
+                else:
+                    det_bbox, det_label, mu_al_box, mu_ep_box, mu_al_cls, mu_ep_cls = self.bbox_head.get_bboxes(
+                        rois[i],
+                        cls_score[i],
+                        bbox_pred[i],
+                        img_shapes[i],
+                        scale_factors[i],
+                        rescale=rescale,
+                        cfg=rcnn_test_cfg)
+                det_bboxes.append(det_bbox)
+                det_labels.append(det_label)
+                mu_al_boxes.append(mu_al_box)
+                mu_ep_boxes.append(mu_ep_box)
+                mu_al_clses.append(mu_al_cls)
+                mu_ep_clses.append(mu_ep_cls)
+            return det_bboxes, det_labels, mu_al_boxes, mu_ep_boxes, mu_al_clses, mu_ep_clses
+        else:
+            det_bboxes = []
+            det_labels = []
+            for i in range(len(proposals)):
+                if rois[i].shape[0] == 0:
+                    # There is no proposal in the single image
+                    det_bbox = rois[i].new_zeros(0, 5)
+                    det_label = rois[i].new_zeros((0, ), dtype=torch.long)
+                    if rcnn_test_cfg is None:
+                        det_bbox = det_bbox[:, :4]
+                        det_label = rois[i].new_zeros(
+                            (0, self.bbox_head.fc_cls.out_features))
+
+                else:
+                    det_bbox, det_label = self.bbox_head.get_bboxes(
+                        rois[i],
+                        cls_score[i],
+                        bbox_pred[i],
+                        img_shapes[i],
+                        scale_factors[i],
+                        rescale=rescale,
+                        cfg=rcnn_test_cfg)
+                det_bboxes.append(det_bbox)
+                det_labels.append(det_label)
+            return det_bboxes, det_labels
 
     def aug_test_bboxes(self, feats, img_metas, proposal_list, rcnn_test_cfg):
         """Test det bboxes with test time augmentation."""

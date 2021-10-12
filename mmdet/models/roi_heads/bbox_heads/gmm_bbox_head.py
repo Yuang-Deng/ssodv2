@@ -292,22 +292,11 @@ class GMMBBoxHead(BaseModule):
         if cls_score is not None:
             avg_factor = max(torch.sum(label_weights > 0).float().item(), 1.)
             if cls_score.numel() > 0:
-                # labels_one_hot = labels.new_zeros(cls_score.size(0), cls_num + 1)
-                # labels_one_hot[labels] = 1
-                # labels = labels[:, None].expand(cls_score.size(0), 4)
-                # cls_p = torch.log(torch.exp(mu_cls).sum(dim=-1))
                 cls_score = mu_cls + torch.sqrt(sigma_cls) * lam_cls
-                cls_score = torch.log((pi_cls.expand(cls_score.size(0), gmm_k, cls_num + 1) * F.softmax(cls_score, dim=1)).sum(dim=1))
 
-
-                # clss = (labels - torch.log(torch.exp(mu_cls).sum(dim=-1)))
-                # loss_cls_ = - (clss * pi_cls.view(clss.size(0), clss.size(1))).sum() / avg_factor
-                loss_cls_ = self.loss_cls(
-                    cls_score,
-                    labels,
-                    label_weights,
-                    avg_factor=avg_factor,
-                    reduction_override=reduction_override)
+                inds = torch.arange(0, cls_score.size(0), 1)
+                gt_score = cls_score[inds, :, labels[inds]]
+                loss_cls_ = - (pi_cls.view(pi_cls.size(0), pi_cls.size(1)) * (gt_score - torch.log(torch.exp(cls_score).sum(dim=-1)))).sum() / avg_factor
                 if isinstance(loss_cls_, dict):
                     losses.update(loss_cls_)
                 else:
@@ -412,8 +401,6 @@ class GMMBBoxHead(BaseModule):
         sigma_cls = F.sigmoid(sigma_cls)
 
         mu_al_cls = (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * sigma_cls).sum(dim=1)
-        # pow = torch.pow(mu_cls - (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * mu_cls).sum(dim=1)[:, None, :].expand(cls_score.size(0), 
-        #                 gmm_k, sigma_cls.size(2)), 2)
         mu_ep_cls = (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * torch.pow(mu_cls - (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * mu_cls).sum(dim=1)[:, None, :].expand(cls_score.size(0), 
                         gmm_k, sigma_cls.size(2)), 2)).sum(dim=1)
 

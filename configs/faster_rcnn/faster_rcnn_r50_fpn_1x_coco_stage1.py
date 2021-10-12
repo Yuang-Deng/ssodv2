@@ -24,12 +24,17 @@ model = dict(
             loss_bbox=dict(type='L1Loss', loss_weight=1.0))),
     train_cfg=dict(
         label_type2weight=[1,2,2]
-    )
+    ),
+    test_cfg=dict(
+        rcnn=dict(
+            return_unc=True
+        )
+    ),
 )
 data_root = 'C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/'
 data = dict(
     samples_per_gpu=16,
-    workers_per_gpu=8,
+    workers_per_gpu=0,
     train=dict(
             ann_file=[
                 data_root + 'VOC2007/ImageSets/Main/trainval.txt',

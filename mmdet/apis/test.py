@@ -1,6 +1,11 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from enum import Flag
 import numpy as np
+import matplotlib.pyplot as plt
+from collections import Counter
+from PIL import ImageDraw, Image, ImageFont
+from numpy.lib.type_check import imag
+
 import torch
 from cv2 import add
 from mmdet.core.evaluation.class_names import voc_classes
@@ -17,7 +22,7 @@ VOC_CLASSES = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car',
                'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse',
                'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train',
                'tvmonitor']
-
+font = ImageFont.truetype("consola.ttf", 20, encoding="unic")
 import mmcv
 import torch
 import torch.distributed as dist
@@ -44,7 +49,13 @@ def single_gpu_test(model,
     add_num_local = 0
     results = []
     dataset = data_loader.dataset
+    unc_al_boxes = torch.zeros([0, 4]).to('cuda')
+    unc_ep_boxes = torch.zeros([0, 4]).to('cuda')
+    unc_al_clses = torch.zeros([0]).to('cuda')
+    unc_ep_clses = torch.zeros([0]).to('cuda')
     prog_bar = mmcv.ProgressBar(len(dataset))
+    bianhao = 0
+    save_unc = open('./work_dirs/faster_rcnn_r50_fpn_1x_coco/out/unc/unc.txt', 'w')
     for i, data in enumerate(data_loader):
         flag = False
         if 'gt_labels' in data.keys():
@@ -54,6 +65,21 @@ def single_gpu_test(model,
             flag = True
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
+            # result = result[0]
+            det_bboxes = result[1][0]
+            det_labels = result[2][0]
+            if result[3][0] is not None:
+                mu_al_boxes = result[3][0]
+                mu_ep_boxes = result[4][0]
+                mu_al_clses = result[5][0]
+                mu_ep_clses = result[6][0]
+                unc_al_boxes = torch.cat([unc_al_boxes, mu_al_boxes])
+                unc_ep_boxes = torch.cat([unc_ep_boxes, mu_ep_boxes])
+                unc_al_clses = torch.cat([unc_al_clses, mu_al_clses])
+                unc_ep_clses = torch.cat([unc_ep_clses, mu_ep_clses])
+            result = result[0]
+            # for label, mu_al_box, mu_ep_box, mu_al_cls, mu_ep_cls in zip(det_labels, mu_al_boxes, mu_ep_boxes, mu_al_clses, mu_ep_clses):
+            
             if flag:
                 # for idx, (d, tags_img, box_img, r) in enumerate(zip(data['img_metas'], tags, box, result)):
                 #     l1 = 0
@@ -114,34 +140,63 @@ def single_gpu_test(model,
                 #     add_b = np.concatenate([bb, zero])
                 #     result[0][0] = np.concatenate([result[0][0], add_b[None,:]])
         # print(add_boxes)
-        add_num_local += add_boxes
+
+
+        # add_num_local += add_boxes
         if show or out_dir:
-            if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
-                img_tensor = data['img'][0]
-            else:
-                img_tensor = data['img'][0].data[0]
             img_metas = data['img_metas'][0].data[0]
-            imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
-            assert len(imgs) == len(img_metas)
+            det_bboxes = det_bboxes.cpu().numpy().tolist()
+            det_labels = det_labels.cpu().numpy().tolist()
+            # mu_al_boxes = mu_al_boxes.cpu().numpy().tolist()
+            # mu_ep_boxes = mu_ep_boxes.cpu().numpy().tolist()
+            # mu_al_clses = mu_al_clses.cpu().numpy().tolist()
+            # mu_ep_clses = mu_ep_clses.cpu().numpy().tolist()
 
-            for i, (img, img_meta) in enumerate(zip(imgs, img_metas)):
-                h, w, _ = img_meta['img_shape']
-                img_show = img[:h, :w, :]
 
-                ori_h, ori_w = img_meta['ori_shape'][:-1]
-                img_show = mmcv.imresize(img_show, (ori_w, ori_h))
+            for i, img_meta in enumerate(img_metas):
+                image = Image.open(osp.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/VOC2012', img_meta['ori_filename'])) # 打开一张图片
+                for det_bbox, det_label in zip(det_bboxes, det_labels):
+                    if det_bbox[4] > 0.3:
+                        draw = ImageDraw.Draw(image) # 在上面画画
+                        draw.rectangle(det_bbox[:4], outline=(255,0,0)) 
+                        # a = [round(i,4) for i in mu_al_box]
+                        draw.text(det_bbox[:2], str(bianhao) + ' ' + VOC_CLASSES[det_label] + ' ' + str(round(det_bbox[4], 5)), 'fuchsia', font)
+                        # save_unc.write(str(bianhao) + ' ' + str(det_bbox[4]) + ' ' + VOC_CLASSES[det_label] + 
+                        # str([round(i,5) for i in mu_al_box]) + 
+                        # str([round(i,5) for i in mu_ep_box]) + 
+                        # str(round(mu_al_cls,5)) + ' ' +
+                        # str(round(mu_ep_cls,5)) + '\n')
+                        bianhao += 1
+                # image.show() 
+                image.save(osp.join(out_dir, 'unc', img_meta['ori_filename']))
 
-                if out_dir:
-                    out_file = osp.join(out_dir, img_meta['ori_filename'])
-                else:
-                    out_file = None
+        # if show or out_dir:
+            # if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
+            #     img_tensor = data['img'][0]
+            # else:
+            #     img_tensor = data['img'][0].data[0]
+            # img_metas = data['img_metas'][0].data[0]
+            # imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
+            # assert len(imgs) == len(img_metas)
 
-                model.module.show_result(
-                    img_show,
-                    result[i],
-                    show=show,
-                    out_file=out_file,
-                    score_thr=show_score_thr)
+            # for i, (img, img_meta) in enumerate(zip(imgs, img_metas)):
+            #     h, w, _ = img_meta['img_shape']
+            #     img_show = img[:h, :w, :]
+
+            #     ori_h, ori_w = img_meta['ori_shape'][:-1]
+            #     img_show = mmcv.imresize(img_show, (ori_w, ori_h))
+
+            #     if out_dir:
+            #         out_file = osp.join(out_dir, img_meta['ori_filename'])
+            #     else:
+            #         out_file = None
+
+            #     model.module.show_result(
+            #         img_show,
+            #         result[i],
+            #         show=show,
+            #         out_file=out_file,
+            #         score_thr=show_score_thr)
 
         # encode mask results
         if isinstance(result[0], tuple):
@@ -155,6 +210,145 @@ def single_gpu_test(model,
     # print(add_num)
     # print(pseudo_num)
     # print(ori_num)
+
+        
+    unc_al_boxes_x = (unc_al_boxes[:, 0] - unc_al_boxes[:, 0].mean()) / unc_al_boxes[:, 0].std()
+    unc_al_boxes_y = (unc_al_boxes[:, 1] - unc_al_boxes[:, 1].mean()) / unc_al_boxes[:, 1].std()
+    unc_al_boxes_w = (unc_al_boxes[:, 2] - unc_al_boxes[:, 2].mean()) / unc_al_boxes[:, 2].std()
+    unc_al_boxes_h = (unc_al_boxes[:, 3] - unc_al_boxes[:, 3].mean()) / unc_al_boxes[:, 3].std()
+    unc_ep_boxes_x = (unc_ep_boxes[:, 0] - unc_ep_boxes[:, 0].mean()) / unc_ep_boxes[:, 0].std()
+    unc_ep_boxes_y = (unc_ep_boxes[:, 1] - unc_ep_boxes[:, 1].mean()) / unc_ep_boxes[:, 1].std()
+    unc_ep_boxes_w = (unc_ep_boxes[:, 2] - unc_ep_boxes[:, 2].mean()) / unc_ep_boxes[:, 2].std()
+    unc_ep_boxes_h = (unc_ep_boxes[:, 3] - unc_ep_boxes[:, 3].mean()) / unc_ep_boxes[:, 3].std()
+    unc_al_clses = (unc_al_clses - unc_al_clses.mean()) / unc_al_clses.std()
+    unc_ep_clses = (unc_ep_clses - unc_ep_clses.mean()) / unc_ep_clses.std()
+    unc_al_boxes_x = unc_al_boxes_x.cpu().numpy()
+    unc_al_boxes_y = unc_al_boxes_y.cpu().numpy()
+    unc_al_boxes_w = unc_al_boxes_w.cpu().numpy()
+    unc_al_boxes_h = unc_al_boxes_h.cpu().numpy()
+    unc_ep_boxes_x = unc_ep_boxes_x.cpu().numpy()
+    unc_ep_boxes_y = unc_ep_boxes_y.cpu().numpy()
+    unc_ep_boxes_w = unc_ep_boxes_w.cpu().numpy()
+    unc_ep_boxes_h = unc_ep_boxes_h.cpu().numpy()
+    unc_al_clses = unc_al_clses.cpu().numpy()
+    unc_ep_clses = unc_ep_clses.cpu().numpy()
+    
+    bianhao = 0
+    # uabx, uaby, uabw, uabh, uebx, ueby, uebw, uebh, uac, uec
+    for u in zip(unc_al_boxes_x, unc_al_boxes_y, unc_al_boxes_w, unc_al_boxes_h, unc_ep_boxes_x, unc_ep_boxes_y, unc_ep_boxes_w, unc_ep_boxes_h, unc_al_clses, unc_ep_clses):
+        save_unc.write(str(bianhao) + 
+                    str(u) + '\n')
+        bianhao += 1
+
+    unc_al_boxes_x = np.around(unc_al_boxes_x, decimals=2)
+    unc_al_boxes_y = np.around(unc_al_boxes_y, decimals=2)
+    unc_al_boxes_w = np.around(unc_al_boxes_w, decimals=2)
+    unc_al_boxes_h = np.around(unc_al_boxes_h, decimals=2)
+    unc_ep_boxes_x = np.around(unc_ep_boxes_x, decimals=3)
+    unc_ep_boxes_y = np.around(unc_ep_boxes_y, decimals=3)
+    unc_ep_boxes_w = np.around(unc_ep_boxes_w, decimals=3)
+    unc_ep_boxes_h = np.around(unc_ep_boxes_h, decimals=3)
+    unc_al_clses = np.around(unc_al_clses, decimals=3)
+    unc_ep_clses = np.around(unc_ep_clses, decimals=4)
+    unc_al_clses = Counter(unc_al_clses)
+    unc_ep_clses = Counter(unc_ep_clses)
+    unc_al_boxes_x = Counter(unc_al_boxes_x)
+    unc_al_boxes_y = Counter(unc_al_boxes_y)
+    unc_al_boxes_w = Counter(unc_al_boxes_w)
+    unc_al_boxes_h = Counter(unc_al_boxes_h)
+    unc_ep_boxes_x = Counter(unc_ep_boxes_x)
+    unc_ep_boxes_y = Counter(unc_ep_boxes_y)
+    unc_ep_boxes_w = Counter(unc_ep_boxes_w)
+    unc_ep_boxes_h = Counter(unc_ep_boxes_h)
+    unc_al_boxes_x = sorted(unc_al_boxes_x.items(), key=lambda d: d[0])
+    unc_al_boxes_y = sorted(unc_al_boxes_y.items(), key=lambda d: d[0])
+    unc_al_boxes_w = sorted(unc_al_boxes_w.items(), key=lambda d: d[0])
+    unc_al_boxes_h = sorted(unc_al_boxes_h.items(), key=lambda d: d[0])
+    unc_ep_boxes_x = sorted(unc_ep_boxes_x.items(), key=lambda d: d[0])
+    unc_ep_boxes_y = sorted(unc_ep_boxes_y.items(), key=lambda d: d[0])
+    unc_ep_boxes_w = sorted(unc_ep_boxes_w.items(), key=lambda d: d[0])
+    unc_ep_boxes_h = sorted(unc_ep_boxes_h.items(), key=lambda d: d[0])
+    unc_al_clses = sorted(unc_al_clses.items(), key=lambda d: d[0])
+    unc_ep_clses = sorted(unc_ep_clses.items(), key=lambda d: d[0])
+    res1 = [
+        unc_al_boxes_x,
+        unc_al_boxes_y,
+        unc_al_boxes_w,
+        unc_al_boxes_h,
+        unc_al_clses,
+    ]
+    res2 = [
+        unc_ep_boxes_x,
+        unc_ep_boxes_y,
+        unc_ep_boxes_w,
+        unc_ep_boxes_h,
+        unc_ep_clses,
+    ]
+    for r in res1:
+        l1 = [item[0] for item  in r]
+        l2 = [item[1] for item  in r]
+        plt.plot(l1, l2)
+    for r in res2:
+        l1 = [item[0] for item  in r]
+        l2 = [item[1] for item  in r]
+        plt.plot(l1, l2)
+    save_unc.close()
+
+
+
+
+    # unc_al_boxes_x_sta = [0] * 100
+    # unc_al_boxes_y_sta = [0] * 100
+    # unc_al_boxes_w_sta = [0] * 100
+    # unc_al_boxes_h_sta = [0] * 100
+    # unc_ep_boxes_x_sta = [0] * 100
+    # unc_ep_boxes_y_sta = [0] * 100
+    # unc_ep_boxes_w_sta = [0] * 100
+    # unc_ep_boxes_h_sta = [0] * 100
+    # unc_al_clses_sta = [0] * 100
+    # unc_ep_clses_sta = [0] * 100
+    # pre = 0
+    # local_list = [i * 0.01 for i in range(1, 101)]
+    # for qj, index in zip(local_list, range(100)):
+    #     for unc in unc_al_boxes_x:
+    #         if unc < qj and unc >= pre:
+    #             unc_al_boxes_x_sta[index] += 1
+    #     for unc in unc_al_boxes_y:
+    #         if unc < qj and unc >= pre:
+    #             unc_al_boxes_y_sta[index] += 1
+    #     for unc in unc_al_boxes_w:
+    #         if unc < qj and unc >= pre:
+    #             unc_al_boxes_w_sta[index] += 1
+    #     for unc in unc_al_boxes_h:
+    #         if unc < qj and unc >= pre:
+    #             unc_al_boxes_h_sta[index] += 1
+    #     for unc in unc_al_clses:
+    #         if unc < qj and unc >= pre:
+    #             unc_al_clses_sta[index] += 1
+    #     # for unc in unc_ep_boxes_x:
+    #         # if unc < qj and unc >= pre:
+    #             # unc_ep_boxes_x_sta[index] += 1
+    #     # for unc in unc_ep_boxes_y:
+    #         # if unc < qj and unc >= pre:
+    #             # unc_ep_boxes_y_sta[index] += 1
+    #     # for unc in unc_ep_boxes_w:
+    #         # if unc < qj and unc >= pre:
+    #             # unc_ep_boxes_w_sta[index] += 1
+    #     # for unc in unc_ep_boxes_h:
+    #         # if unc < qj and unc >= pre:
+    #             # unc_ep_boxes_h_sta[index] += 1
+    #     pre = qj
+    # plt.bar(range(len(unc_al_boxes_x_sta)), unc_al_boxes_x_sta)
+    # plt.show()
+    # plt.bar(range(len(unc_al_boxes_y_sta)), unc_al_boxes_y_sta)
+    # plt.show()
+    # plt.bar(range(len(unc_al_boxes_w_sta)), unc_al_boxes_w_sta)
+    # plt.show()
+    # plt.bar(range(len(unc_al_boxes_h_sta)), unc_al_boxes_h_sta)
+    # plt.show()
+    # plt.bar(range(len(unc_al_clses_sta)), unc_al_clses_sta)
+    # plt.show()
+        
     return results
 
 
@@ -375,7 +569,7 @@ def gen_voc_label(data, result, tags, boxes, ori_boxes, pseudo_th=0.9):
                 if box[4] < pseudo_th[ridx]:
                     continue
                 # print(box)
-                pseudo_num[t.item()] += 1
+                pseudo_num[ridx] += 1
                 objectt = doc.createElement("object")
                 annotation.appendChild(objectt)
                 bndbox = doc.createElement("bndbox")
@@ -406,15 +600,15 @@ def gen_voc_label(data, result, tags, boxes, ori_boxes, pseudo_th=0.9):
                 xmax.appendChild(xmaxnum)
                 ymax.appendChild(ymaxnum)
                 score.appendChild(scorenum)
-        f = open(os.path.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit', os.path.join(d.data[0][0]['filename'].split('/')[7],
-                                                             os.path.join('Annotations',
-                                                                          d.data[0][0][
-                                                                              'ori_filename'].split(
-                                                                              '\\')[1].split('.')[
-                                                                              0] + '.xml'))),
-                 "w")
-        f.write(doc.toprettyxml(indent="  "))
-        f.close()
+        # f = open(os.path.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit', os.path.join(d.data[0][0]['filename'].split('/')[7],
+        #                                                      os.path.join('Annotations',
+        #                                                                   d.data[0][0][
+        #                                                                       'ori_filename'].split(
+        #                                                                       '\\')[1].split('.')[
+        #                                                                       0] + '.xml'))),
+        #          "w")
+        # f.write(doc.toprettyxml(indent="  "))
+        # f.close()
     return add_num, pseudo_num
 
 
