@@ -40,7 +40,9 @@ class GMMBBoxHead(BaseModule):
                  loss_bbox=dict(
                      type='SmoothL1Loss', beta=1.0, loss_weight=1.0),
                  eta=12,
-                 cls_lambda=256,
+                 cls_lambda=1,
+                 lam_box_loss=1,
+                 warm_epoch=2,
                  init_cfg=None):
         super(GMMBBoxHead, self).__init__(init_cfg)
         assert with_cls or with_reg
@@ -58,6 +60,8 @@ class GMMBBoxHead(BaseModule):
         self.fp16_enabled = False
         self.eta = eta
         self.cls_lambda = cls_lambda
+        self.lam_box_loss = lam_box_loss
+        self.warm_epoch = warm_epoch
 
         self.bbox_coder = build_bbox_coder(bbox_coder)
         self.loss_cls = build_loss(loss_cls)
@@ -288,6 +292,9 @@ class GMMBBoxHead(BaseModule):
         pi_box = F.softmax(pi_box, dim=1)
         sigma_box = F.sigmoid(sigma_box)
 
+        max_mu_ep_box, _ = (pi_box * torch.pow(mu_box - (pi_box * mu_box).sum(dim=1)[:, None, :].expand(bbox_pred.size(0), 
+                        gmm_k, mu_box.size(2)), 2)).max(-1)
+
         cls_score = cls_score.view(cls_score.size(0), gmm_k, -1)
         pi_cls = cls_score[:, :, -1:]
         mu_cls = cls_score[:, :, :cls_score.size(2) // 2]
@@ -325,10 +332,15 @@ class GMMBBoxHead(BaseModule):
                         bbox_pred.size(0), gmm_k, -1,
                         4)[pos_inds.type(torch.bool), :,
                            labels[pos_inds.type(torch.bool)]]
+                    max_mu_ep_box = max_mu_ep_box.view(
+                        bbox_pred.size(0), gmm_k)[pos_inds.type(torch.bool), :]
                     pos_target = bbox_targets[pos_inds.type(torch.bool)]
                     pos_target = pos_target[:, None, :].expand(pos_target.size(0), gmm_k, pos_target.size(1))
                 loss_box = - torch.log(self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box) + 1e-9) / self.eta
-                losses['loss_bbox'] = (loss_box * pos_pi_box).sum() / pos_mu_box.size(0)
+                if self.epoch > self.warm_epoch:
+                    losses['loss_bbox'] = (loss_box * pos_pi_box * max_mu_ep_box[:, :, None].expand([max_mu_ep_box.size(0), max_mu_ep_box.size(1), 4])).sum() * self.lam_box_loss
+                else:
+                    losses['loss_bbox'] = (loss_box * pos_pi_box).sum() / pos_mu_box.size(0)
             else:
                 losses['loss_bbox'] = bbox_pred[pos_inds].sum()
         
@@ -343,8 +355,9 @@ class GMMBBoxHead(BaseModule):
 
                 inds = torch.arange(0, cls_score.size(0), 1)
                 gt_score = cls_score[inds, :, labels[inds]]
-                loss_cls_ = - (pi_cls.view(pi_cls.size(0), pi_cls.size(1)) * (gt_score - torch.log(torch.exp(cls_score).sum(dim=-1)))).sum() / avg_factor
-                
+                loss_cls_ = - ((pi_cls.view(pi_cls.size(0), pi_cls.size(1)) * (gt_score - torch.log(torch.exp(cls_score).sum(dim=-1)))).sum() / avg_factor) * self.cls_lambda
+                loss_cls_ = torch.clamp(loss_cls_, min=1e-5, max=1)
+                # print(loss_cls_)
                 # cls_score = torch.log((pi_cls.expand(cls_score.size(0), gmm_k, cls_num + 1) * F.softmax(cls_score, dim=1)).sum(dim=1))
                 # one_hot_label = self.gen_one_hot_label(self.num_classes, labels, cls_score.device)
                 
@@ -677,3 +690,6 @@ class GMMBBoxHead(BaseModule):
             bboxes -= offsets
             batch_dets = torch.cat([bboxes, scores], dim=2)
             return batch_dets, labels
+
+    def set_epoch(self, epoch):
+        self.epoch = epoch

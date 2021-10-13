@@ -14,7 +14,9 @@ model = dict(
             num_classes=20,
             gmm_k=4,
             eta=12,
-            cls_lambda=256,
+            lam_box_loss=1,
+            cls_lambda=1,
+            warm_epoch=2,
             bbox_coder=dict(
                 type='DeltaXYWHBBoxCoder',
                 target_means=[0., 0., 0., 0.],
@@ -49,6 +51,7 @@ data = dict(
 )
 optimizer = dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001)
 runner = dict(type='EpochBasedRunner', max_epochs=12)
+custom_hooks = [dict(type='NumClassCheckHook'), dict(type='RoiEpochSetHook')]
 
 # lr_config = dict(
 #     policy='step',

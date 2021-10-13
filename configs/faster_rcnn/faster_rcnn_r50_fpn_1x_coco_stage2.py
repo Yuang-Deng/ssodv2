@@ -5,23 +5,26 @@ _base_ = [
 ]
 
 model = dict(
-#     roi_head=dict(
-#         bbox_head=dict(
-#             type='GMMShared2FCBBoxHead',
-#             in_channels=256,
-#             fc_out_channels=1024,
-#             roi_feat_size=7,
-#             num_classes=20,
-#             gmm_k=4,
-#             eta=12,
-#             bbox_coder=dict(
-#                 type='DeltaXYWHBBoxCoder',
-#                 target_means=[0., 0., 0., 0.],
-#                 target_stds=[0.1, 0.1, 0.2, 0.2]),
-#             reg_class_agnostic=False,
-#             loss_cls=dict(
-#                 type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
-#             loss_bbox=dict(type='L1Loss', loss_weight=1.0))),
+    roi_head=dict(
+        bbox_head=dict(
+            type='GMMShared2FCBBoxHead',
+            in_channels=256,
+            fc_out_channels=1024,
+            roi_feat_size=7,
+            num_classes=20,
+            gmm_k=4,
+            eta=12,
+            lam_box_loss=1,
+            cls_lambda=1,
+            warm_epoch=2,
+            bbox_coder=dict(
+                type='DeltaXYWHBBoxCoder',
+                target_means=[0., 0., 0., 0.],
+                target_stds=[0.1, 0.1, 0.2, 0.2]),
+            reg_class_agnostic=False,
+            loss_cls=dict(
+                type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
+            loss_bbox=dict(type='L1Loss', loss_weight=1.0))),
     train_cfg=dict(
         label_type2weight=[1,2,2]
     )
@@ -29,7 +32,7 @@ model = dict(
 data_root = 'C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/'
 data = dict(
     samples_per_gpu=8,
-    workers_per_gpu=8,
+    workers_per_gpu=0,
     train=dict(
             ann_file=[
                 data_root + 'VOC2007/ImageSets/Main/trainval.txt',
@@ -48,6 +51,8 @@ data = dict(
 )
 optimizer = dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001)
 runner = dict(type='EpochBasedRunner', max_epochs=12)
+custom_hooks = [dict(type='NumClassCheckHook'), dict(type='RoiEpochSetHook')]
+
 
 # lr_config = dict(
 #     policy='step',
