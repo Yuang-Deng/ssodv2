@@ -231,7 +231,8 @@ class TwoStageDetector(BaseDetector):
                 gt_bboxes_ignore=gt_bboxes_ignore,
                 proposal_cfg=proposal_cfg)
             for k in rpn_losses.keys():
-                rpn_losses[k] += un_rpn_losses[k] * label_type2weight[1]
+                for i in range(len(rpn_losses[k])):
+                    rpn_losses[k][i] += un_rpn_losses[k][i] * label_type2weight[1]
             losses.update(rpn_losses)
         else:
             proposal_list = proposals
@@ -240,10 +241,15 @@ class TwoStageDetector(BaseDetector):
                                                  label_gt_bboxes, label_gt_labels,
                                                  gt_bboxes_ignore, gt_masks,
                                                  **kwargs)
-        roi_losses = self.roi_head.forward_train(unlabel_x, unlabel_img_metas, un_proposal_list,
+        un_roi_losses = self.roi_head.forward_train(unlabel_x, unlabel_img_metas, un_proposal_list,
                                                  unlabel_gt_bboxes, unlabel_gt_labels,
                                                  gt_bboxes_ignore, gt_masks,
                                                  **kwargs)
+        for k in roi_losses.keys():
+            if k == 'acc':
+                roi_losses[k] += un_roi_losses[k]
+                roi_losses[k] /= 2
+            roi_losses[k] += un_roi_losses[k] * label_type2weight[1]
         losses.update(roi_losses)
 
         return losses
