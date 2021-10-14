@@ -16,7 +16,7 @@ model = dict(
             eta=12,
             lam_box_loss=1,
             cls_lambda=1,
-            warm_epoch=2,
+            warm_epoch=12,
             bbox_coder=dict(
                 type='DeltaXYWHBBoxCoder',
                 target_means=[0., 0., 0., 0.],
@@ -49,7 +49,7 @@ data = dict(
                 img_prefix=data_root + 'VOC2012/',
             )
 )
-optimizer = dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
 runner = dict(type='EpochBasedRunner', max_epochs=12)
 custom_hooks = [dict(type='NumClassCheckHook'), dict(type='RoiEpochSetHook')]
 
