@@ -32,7 +32,7 @@ model = dict(
 data_root = 'C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/'
 data = dict(
     samples_per_gpu=16,
-    workers_per_gpu=8,
+    workers_per_gpu=2,
     train=dict(
             ann_file=[
                 data_root + 'VOC2007/ImageSets/Main/trainval.txt',
