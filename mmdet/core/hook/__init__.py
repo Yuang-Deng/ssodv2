@@ -7,9 +7,11 @@ from .yolox_lrupdater_hook import YOLOXLrUpdaterHook
 from .yolox_mode_switch_hook import YOLOXModeSwitchHook
 from .grad_cam_hook import GradCamHook
 from .roi_epoch_set_hook import RoiEpochSetHook
+from .eval_hooks import EvalNDHook
 
 __all__ = [
     'SyncRandomSizeHook', 'YOLOXModeSwitchHook', 'SyncNormHook',
     'ExpMomentumEMAHook', 'LinearMomentumEMAHook', 'YOLOXLrUpdaterHook',
-    'CheckInvalidLossHook', 'GradCamHook', 'RoiEpochSetHook'
+    'CheckInvalidLossHook', 'GradCamHook', 'RoiEpochSetHook',
+    'EvalNDHook'
 ]

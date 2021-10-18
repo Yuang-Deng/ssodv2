@@ -210,7 +210,7 @@ class Eval_ND_Hook(Hook):
         if self.start is not None and runner.epoch >= self.start:
             self.after_train_epoch(runner)
         self.initial_flag = False
-        if self.by_epoch and self._should_evaluate(runner):
+        if runner.epoch == 0:
             self._do_evaluate(runner)
 
     def after_train_iter(self, runner):

@@ -257,7 +257,8 @@ class GMMBBoxHead(BaseModule):
         return labels, label_weights, bbox_targets, bbox_weights
 
     def _gaussian_dist_pdf(self, val, mean, var):
-        return torch.exp(- (val - mean) ** 2.0 / var / 2.0) / torch.sqrt(2.0 * np.pi * var)
+        eps = 0.3
+        return torch.exp(- (val - mean) ** 2.0 / var / 2.0) / torch.sqrt(2.0 * np.pi * (var + eps**2))
     
     def gen_one_hot_label(self, num_classes, labels, device):
         one_hot_label = torch.zeros(labels.size(0), num_classes + 1).to(device)
@@ -337,7 +338,9 @@ class GMMBBoxHead(BaseModule):
                     pos_target = pos_target[:, None, :].expand(pos_target.size(0), gmm_k, pos_target.size(1))
                 loss_box = - torch.log((pos_pi_box * self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box)).sum(1) + 1e-9).sum(-1) / self.eta
                 if self.epoch > self.warm_epoch:
-                    losses['loss_bbox'] = (loss_box * max_mu_ep_box).sum() * self.lam_box_loss
+                    losses['loss_bbox'] = (loss_box * max_mu_ep_box).sum() / max_mu_ep_box.sum() * self.lam_box_loss
+                    # self.lam_box_loss = 1 / max_mu_ep_box.sum()
+                    # losses['loss_bbox'] = (loss_box * max_mu_ep_box).sum() * self.lam_box_loss
                 else:
                     losses['loss_bbox'] = (loss_box).sum() / pos_mu_box.size(0)
                 # print('loss cls')
