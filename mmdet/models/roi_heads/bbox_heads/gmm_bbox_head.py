@@ -338,7 +338,16 @@ class GMMBBoxHead(BaseModule):
                     pos_target = pos_target[:, None, :].expand(pos_target.size(0), gmm_k, pos_target.size(1))
                 loss_box = - torch.log((pos_pi_box * self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box)).sum(1) + 1e-9).sum(-1) / self.eta
                 if self.epoch > self.warm_epoch:
-                    losses['loss_bbox'] = (loss_box * max_mu_ep_box).sum() / max_mu_ep_box.sum() * self.lam_box_loss
+
+                    # losses['loss_bbox'] = (loss_box * max_mu_ep_box).sum() / max_mu_ep_box.sum() * self.lam_box_loss
+                    print('max_mu_ep_box before softmax ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
+                    print(max_mu_ep_box)
+                    max_mu_ep_box = 1- F.softmax(max_mu_ep_box)
+                    losses['loss_bbox'] = ((loss_box * max_mu_ep_box).sum() / max_mu_ep_box.sum()) * self.lam_box_loss
+                    print('pos num:' + str(pos_pi_box.size(0)))
+                    print('max_mu_ep_box after softmax ----------------------------------------------------------')
+
+
                     # self.lam_box_loss = 1 / max_mu_ep_box.sum()
                     # losses['loss_bbox'] = (loss_box * max_mu_ep_box).sum() * self.lam_box_loss
                 else:
