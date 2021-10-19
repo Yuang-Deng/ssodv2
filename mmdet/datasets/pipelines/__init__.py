@@ -13,7 +13,7 @@ from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, MixUp, Mosaic,
                          Normalize, Pad, PhotoMetricDistortion, RandomAffine,
                          RandomCenterCropPad, RandomCrop, RandomFlip,
                          RandomShift, Resize, SegRescale)
-from .stac_sugment import STACTransform
+from .stac_sugment import STACTransform, COCOTransform
 
 __all__ = [
     'Compose', 'to_tensor', 'ToTensor', 'ImageToTensor', 'ToDataContainer',
@@ -25,5 +25,5 @@ __all__ = [
     'InstaBoost', 'RandomCenterCropPad', 'AutoAugment', 'CutOut', 'Shear',
     'Rotate', 'ColorTransform', 'EqualizeTransform', 'BrightnessTransform',
     'ContrastTransform', 'Translate', 'RandomShift', 'Mosaic', 'MixUp',
-    'RandomAffine', 'STACTransform'
+    'RandomAffine', 'STACTransform', 'COCOTransform'
 ]

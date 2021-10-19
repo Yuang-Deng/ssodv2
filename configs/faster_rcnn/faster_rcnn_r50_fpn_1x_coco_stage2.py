@@ -49,7 +49,7 @@ data = dict(
                 img_prefix=data_root + 'VOC2012/',
             )
 )
-optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=0.0025, momentum=0.9, weight_decay=0.0001)
 runner = dict(type='EpochBasedRunner', max_epochs=12)
 custom_hooks = [dict(type='NumClassCheckHook'), dict(type='RoiEpochSetHook')]
 

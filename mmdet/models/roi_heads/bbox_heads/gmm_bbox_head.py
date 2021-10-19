@@ -346,6 +346,7 @@ class GMMBBoxHead(BaseModule):
                     losses['loss_bbox'] = ((loss_box * max_mu_ep_box).sum() / max_mu_ep_box.sum()) * self.lam_box_loss
                     print('pos num:' + str(pos_pi_box.size(0)))
                     print('max_mu_ep_box after softmax ----------------------------------------------------------')
+                    print(max_mu_ep_box)
 
 
                     # self.lam_box_loss = 1 / max_mu_ep_box.sum()
