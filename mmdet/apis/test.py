@@ -143,32 +143,20 @@ def single_gpu_test(model,
 
 
         # add_num_local += add_boxes
-        if show or out_dir:
-            img_metas = data['img_metas'][0].data[0]
-            det_bboxes = det_bboxes.cpu().numpy().tolist()
-            det_labels = det_labels.cpu().numpy().tolist()
-            # mu_al_boxes = mu_al_boxes.cpu().numpy().tolist()
-            # mu_ep_boxes = mu_ep_boxes.cpu().numpy().tolist()
-            # mu_al_clses = mu_al_clses.cpu().numpy().tolist()
-            # mu_ep_clses = mu_ep_clses.cpu().numpy().tolist()
+        # if show or out_dir:
+        #     img_metas = data['img_metas'][0].data[0]
+        #     det_bboxes = det_bboxes.cpu().numpy().tolist()
+        #     det_labels = det_labels.cpu().numpy().tolist()
 
-
-            for i, img_meta in enumerate(img_metas):
-                image = Image.open(osp.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/VOC2012', img_meta['ori_filename'])) # 打开一张图片
-                for det_bbox, det_label in zip(det_bboxes, det_labels):
-                    if det_bbox[4] > 0.3:
-                        draw = ImageDraw.Draw(image) # 在上面画画
-                        draw.rectangle(det_bbox[:4], outline=(255,0,0)) 
-                        # a = [round(i,4) for i in mu_al_box]
-                        draw.text(det_bbox[:2], str(bianhao) + ' ' + VOC_CLASSES[det_label] + ' ' + str(round(det_bbox[4], 5)), 'fuchsia', font)
-                        # save_unc.write(str(bianhao) + ' ' + str(det_bbox[4]) + ' ' + VOC_CLASSES[det_label] + 
-                        # str([round(i,5) for i in mu_al_box]) + 
-                        # str([round(i,5) for i in mu_ep_box]) + 
-                        # str(round(mu_al_cls,5)) + ' ' +
-                        # str(round(mu_ep_cls,5)) + '\n')
-                        bianhao += 1
-                # image.show() 
-                image.save(osp.join(out_dir, 'unc', img_meta['ori_filename']))
+        #     for i, img_meta in enumerate(img_metas):
+        #         image = Image.open(osp.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/VOC2012', img_meta['ori_filename'])) # 打开一张图片
+        #         for det_bbox, det_label in zip(det_bboxes, det_labels):
+        #             if det_bbox[4] > 0.3:
+        #                 draw = ImageDraw.Draw(image) # 在上面画画
+        #                 draw.rectangle(det_bbox[:4], outline=(255,0,0)) 
+        #                 draw.text(det_bbox[:2], str(bianhao) + ' ' + VOC_CLASSES[det_label] + ' ' + str(round(det_bbox[4], 5)), 'fuchsia', font)
+        #                 bianhao += 1
+        #         image.save(osp.join(out_dir, 'unc', img_meta['ori_filename']))
 
         # if show or out_dir:
             # if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
@@ -212,24 +200,32 @@ def single_gpu_test(model,
     # print(ori_num)
 
         
-    unc_al_boxes_x = (unc_al_boxes[:, 0] - unc_al_boxes[:, 0].mean()) / unc_al_boxes[:, 0].std()
-    unc_al_boxes_y = (unc_al_boxes[:, 1] - unc_al_boxes[:, 1].mean()) / unc_al_boxes[:, 1].std()
-    unc_al_boxes_w = (unc_al_boxes[:, 2] - unc_al_boxes[:, 2].mean()) / unc_al_boxes[:, 2].std()
-    unc_al_boxes_h = (unc_al_boxes[:, 3] - unc_al_boxes[:, 3].mean()) / unc_al_boxes[:, 3].std()
-    unc_ep_boxes_x = (unc_ep_boxes[:, 0] - unc_ep_boxes[:, 0].mean()) / unc_ep_boxes[:, 0].std()
-    unc_ep_boxes_y = (unc_ep_boxes[:, 1] - unc_ep_boxes[:, 1].mean()) / unc_ep_boxes[:, 1].std()
-    unc_ep_boxes_w = (unc_ep_boxes[:, 2] - unc_ep_boxes[:, 2].mean()) / unc_ep_boxes[:, 2].std()
-    unc_ep_boxes_h = (unc_ep_boxes[:, 3] - unc_ep_boxes[:, 3].mean()) / unc_ep_boxes[:, 3].std()
-    unc_al_clses = (unc_al_clses - unc_al_clses.mean()) / unc_al_clses.std()
-    unc_ep_clses = (unc_ep_clses - unc_ep_clses.mean()) / unc_ep_clses.std()
-    unc_al_boxes_x = unc_al_boxes_x.cpu().numpy()
-    unc_al_boxes_y = unc_al_boxes_y.cpu().numpy()
-    unc_al_boxes_w = unc_al_boxes_w.cpu().numpy()
-    unc_al_boxes_h = unc_al_boxes_h.cpu().numpy()
-    unc_ep_boxes_x = unc_ep_boxes_x.cpu().numpy()
-    unc_ep_boxes_y = unc_ep_boxes_y.cpu().numpy()
-    unc_ep_boxes_w = unc_ep_boxes_w.cpu().numpy()
-    unc_ep_boxes_h = unc_ep_boxes_h.cpu().numpy()
+    # unc_al_boxes_x = (unc_al_boxes[:, 0] - unc_al_boxes[:, 0].mean()) / unc_al_boxes[:, 0].std()
+    # unc_al_boxes_y = (unc_al_boxes[:, 1] - unc_al_boxes[:, 1].mean()) / unc_al_boxes[:, 1].std()
+    # unc_al_boxes_w = (unc_al_boxes[:, 2] - unc_al_boxes[:, 2].mean()) / unc_al_boxes[:, 2].std()
+    # unc_al_boxes_h = (unc_al_boxes[:, 3] - unc_al_boxes[:, 3].mean()) / unc_al_boxes[:, 3].std()
+    # unc_ep_boxes_x = (unc_ep_boxes[:, 0] - unc_ep_boxes[:, 0].mean()) / unc_ep_boxes[:, 0].std()
+    # unc_ep_boxes_y = (unc_ep_boxes[:, 1] - unc_ep_boxes[:, 1].mean()) / unc_ep_boxes[:, 1].std()
+    # unc_ep_boxes_w = (unc_ep_boxes[:, 2] - unc_ep_boxes[:, 2].mean()) / unc_ep_boxes[:, 2].std()
+    # unc_ep_boxes_h = (unc_ep_boxes[:, 3] - unc_ep_boxes[:, 3].mean()) / unc_ep_boxes[:, 3].std()
+    # unc_al_clses = (unc_al_clses - unc_al_clses.mean()) / unc_al_clses.std()
+    # unc_ep_clses = (unc_ep_clses - unc_ep_clses.mean()) / unc_ep_clses.std()
+    # unc_al_boxes_x = unc_al_boxes_x.cpu().numpy()
+    # unc_al_boxes_y = unc_al_boxes_y.cpu().numpy()
+    # unc_al_boxes_w = unc_al_boxes_w.cpu().numpy()
+    # unc_al_boxes_h = unc_al_boxes_h.cpu().numpy()
+    # unc_ep_boxes_x = unc_ep_boxes_x.cpu().numpy()
+    # unc_ep_boxes_y = unc_ep_boxes_y.cpu().numpy()
+    # unc_ep_boxes_w = unc_ep_boxes_w.cpu().numpy()
+    # unc_ep_boxes_h = unc_ep_boxes_h.cpu().numpy()
+    unc_al_boxes_x = unc_al_boxes[:, 0].cpu().numpy()
+    unc_al_boxes_y = unc_al_boxes[:, 1].cpu().numpy()
+    unc_al_boxes_w = unc_al_boxes[:, 2].cpu().numpy()
+    unc_al_boxes_h = unc_al_boxes[:, 3].cpu().numpy()
+    unc_ep_boxes_x = unc_ep_boxes[:, 0].cpu().numpy()
+    unc_ep_boxes_y = unc_ep_boxes[:, 1].cpu().numpy()
+    unc_ep_boxes_w = unc_ep_boxes[:, 2].cpu().numpy()
+    unc_ep_boxes_h = unc_ep_boxes[:, 3].cpu().numpy()
     unc_al_clses = unc_al_clses.cpu().numpy()
     unc_ep_clses = unc_ep_clses.cpu().numpy()
     
