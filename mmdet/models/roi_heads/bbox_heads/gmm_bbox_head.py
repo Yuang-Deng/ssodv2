@@ -293,8 +293,9 @@ class GMMBBoxHead(BaseModule):
         pi_box = F.softmax(pi_box, dim=1)
         sigma_box = F.sigmoid(sigma_box)
 
-        max_mu_ep_box = (pi_box * torch.pow(mu_box - (pi_box * mu_box).sum(dim=1)[:, None, :].expand(bbox_pred.size(0), 
-                        gmm_k, mu_box.size(2)), 2)).max(-1)[0].sum(-1)
+        # max_mu_ep_box = (pi_box * torch.pow(mu_box - (pi_box * mu_box).sum(dim=1)[:, None, :].expand(bbox_pred.size(0), 
+        #                 gmm_k, mu_box.size(2)), 2)).max(-1)[0].sum(-1)
+        max_mu_al_box = (pi_box * sigma_box).sum(dim=1).max(-1)[0]
 
         cls_score = cls_score.view(cls_score.size(0), gmm_k, -1)
         pi_cls = cls_score[:, :, -1:]
@@ -308,7 +309,7 @@ class GMMBBoxHead(BaseModule):
         if bbox_pred is not None:
             bg_class_ind = self.num_classes
             # 0~self.num_classes-1 are FG, self.num_classes is BG
-            pos_inds = (labels >= 0) & (labels < bg_class_ind)
+            pos_inds = (labels >= 0) & (labels < bg_class_ind) & (mu_al_box < 1)
             # do not perform bounding box regression for BG anymore.
             if pos_inds.any():
                 if self.reg_decoded_bbox:
@@ -333,7 +334,7 @@ class GMMBBoxHead(BaseModule):
                         bbox_pred.size(0), gmm_k, -1,
                         4)[pos_inds.type(torch.bool), :,
                            labels[pos_inds.type(torch.bool)]]
-                    max_mu_ep_box = max_mu_ep_box[pos_inds.type(torch.bool)]
+                    max_mu_al_box = max_mu_al_box[pos_inds.type(torch.bool)]
                     pos_target = bbox_targets[pos_inds.type(torch.bool)]
                     pos_target = pos_target[:, None, :].expand(pos_target.size(0), gmm_k, pos_target.size(1))
                 loss_box = - torch.log((pos_pi_box * self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box)).sum(1) + 1e-9).sum(-1) / self.eta
@@ -341,12 +342,12 @@ class GMMBBoxHead(BaseModule):
 
                     # losses['loss_bbox'] = (loss_box * max_mu_ep_box).sum() / max_mu_ep_box.sum() * self.lam_box_loss
                     print('max_mu_ep_box before softmax ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
-                    print(max_mu_ep_box)
-                    max_mu_ep_box = 1- F.softmax(max_mu_ep_box)
-                    losses['loss_bbox'] = ((loss_box * max_mu_ep_box).sum() / max_mu_ep_box.sum()) * self.lam_box_loss
+                    print(max_mu_al_box)
+                    max_mu_al_box = 1- max_mu_al_box
+                    losses['loss_bbox'] = ((loss_box * max_mu_al_box).sum() / max_mu_al_box.sum()) * self.lam_box_loss
                     print('pos num:' + str(pos_pi_box.size(0)))
                     print('max_mu_ep_box after softmax ----------------------------------------------------------')
-                    print(max_mu_ep_box)
+                    print(max_mu_al_box)
 
 
                     # self.lam_box_loss = 1 / max_mu_ep_box.sum()
