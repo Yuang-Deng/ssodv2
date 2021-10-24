@@ -309,7 +309,7 @@ class GMMBBoxHead(BaseModule):
         if bbox_pred is not None:
             bg_class_ind = self.num_classes
             # 0~self.num_classes-1 are FG, self.num_classes is BG
-            pos_inds = (labels >= 0) & (labels < bg_class_ind) & (mu_al_box < 1)
+            pos_inds = (labels >= 0) & (labels < bg_class_ind) & (max_mu_al_box < 1)
             # do not perform bounding box regression for BG anymore.
             if pos_inds.any():
                 if self.reg_decoded_bbox:
