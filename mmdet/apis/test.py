@@ -55,7 +55,7 @@ def single_gpu_test(model,
     unc_ep_clses = torch.zeros([0]).to('cuda')
     prog_bar = mmcv.ProgressBar(len(dataset))
     bianhao = 0
-    save_unc = open('./work_dirs/faster_rcnn_r50_fpn_1x_coco/out/unc/unc.txt', 'w')
+    save_unc = open('./work_dirs/faster_rcnn_r50_fpn_1x_coco_stage1/out/unc/unc.txt', 'w')
     for i, data in enumerate(data_loader):
         flag = False
         if 'gt_labels' in data.keys():
@@ -80,7 +80,7 @@ def single_gpu_test(model,
             result = result[0]
             # for label, mu_al_box, mu_ep_box, mu_al_cls, mu_ep_cls in zip(det_labels, mu_al_boxes, mu_ep_boxes, mu_al_clses, mu_ep_clses):
             
-            if flag:
+            # if flag:
                 # for idx, (d, tags_img, box_img, r) in enumerate(zip(data['img_metas'], tags, box, result)):
                 #     l1 = 0
                 #     for bb in r:
@@ -103,7 +103,9 @@ def single_gpu_test(model,
                 # nms_cfg = {'type': 'nms', 'iou_threshold': 0.5}
                 # multiclass_nms(boxfornms, labelfornms, show_score_thr - 0.11, nms_cfg,
                 #                                     100)
-                cur_add_num, cur_pseudo_num = gen_voc_label(data, result, tags, box, box, [show_score_thr] * len(VOC_CLASSES))
+
+                # cur_add_num, cur_pseudo_num = gen_voc_label(data, result, tags, box, box, [show_score_thr] * len(VOC_CLASSES))
+                
                 # for i in range(len(cur_add_num)):
                 #     add_num[i] += cur_add_num[i]
                 # for i in range(len(cur_pseudo_num)):
@@ -147,44 +149,49 @@ def single_gpu_test(model,
         #     img_metas = data['img_metas'][0].data[0]
         #     det_bboxes = det_bboxes.cpu().numpy().tolist()
         #     det_labels = det_labels.cpu().numpy().tolist()
+        #     unc_al_boxes_s = unc_al_boxes.max(dim=-1)[0].cpu().numpy()
+        #     unc_ep_boxes_s = unc_ep_boxes.max(dim=-1)[0].cpu().numpy()
+        #     unc_al_clses_s = unc_al_clses.cpu().numpy()
+        #     unc_ep_clses_s = unc_ep_clses.cpu().numpy()
 
         #     for i, img_meta in enumerate(img_metas):
         #         image = Image.open(osp.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/VOC2012', img_meta['ori_filename'])) # 打开一张图片
-        #         for det_bbox, det_label in zip(det_bboxes, det_labels):
-        #             if det_bbox[4] > 0.3:
+        #         for det_bbox, det_label, ab, eb, ac, ec in zip(det_bboxes, det_labels, unc_al_boxes_s, unc_ep_boxes_s, unc_al_clses_s, unc_ep_clses_s):
+        #             if det_bbox[4] > 0.1:
         #                 draw = ImageDraw.Draw(image) # 在上面画画
         #                 draw.rectangle(det_bbox[:4], outline=(255,0,0)) 
         #                 draw.text(det_bbox[:2], str(bianhao) + ' ' + VOC_CLASSES[det_label] + ' ' + str(round(det_bbox[4], 5)), 'fuchsia', font)
+        #                 save_unc.write(str(bianhao) + ' ' +  str(ab) + ' ' +  str(eb) + ' ' +  str(ac) + ' ' +  str(ec) + '\n')
         #                 bianhao += 1
         #         image.save(osp.join(out_dir, 'unc', img_meta['ori_filename']))
 
-        # if show or out_dir:
-            # if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
-            #     img_tensor = data['img'][0]
-            # else:
-            #     img_tensor = data['img'][0].data[0]
-            # img_metas = data['img_metas'][0].data[0]
-            # imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
-            # assert len(imgs) == len(img_metas)
+        if show or out_dir:
+            if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
+                img_tensor = data['img'][0]
+            else:
+                img_tensor = data['img'][0].data[0]
+            img_metas = data['img_metas'][0].data[0]
+            imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
+            assert len(imgs) == len(img_metas)
 
-            # for i, (img, img_meta) in enumerate(zip(imgs, img_metas)):
-            #     h, w, _ = img_meta['img_shape']
-            #     img_show = img[:h, :w, :]
+            for i, (img, img_meta) in enumerate(zip(imgs, img_metas)):
+                h, w, _ = img_meta['img_shape']
+                img_show = img[:h, :w, :]
 
-            #     ori_h, ori_w = img_meta['ori_shape'][:-1]
-            #     img_show = mmcv.imresize(img_show, (ori_w, ori_h))
+                ori_h, ori_w = img_meta['ori_shape'][:-1]
+                img_show = mmcv.imresize(img_show, (ori_w, ori_h))
 
-            #     if out_dir:
-            #         out_file = osp.join(out_dir, img_meta['ori_filename'])
-            #     else:
-            #         out_file = None
+                if out_dir:
+                    out_file = osp.join(out_dir, img_meta['ori_filename'])
+                else:
+                    out_file = None
 
-            #     model.module.show_result(
-            #         img_show,
-            #         result[i],
-            #         show=show,
-            #         out_file=out_file,
-            #         score_thr=show_score_thr)
+                model.module.show_result(
+                    img_show,
+                    result[i],
+                    show=show,
+                    out_file=out_file,
+                    score_thr=show_score_thr)
 
         # encode mask results
         if isinstance(result[0], tuple):
@@ -218,76 +225,80 @@ def single_gpu_test(model,
     # unc_ep_boxes_y = unc_ep_boxes_y.cpu().numpy()
     # unc_ep_boxes_w = unc_ep_boxes_w.cpu().numpy()
     # unc_ep_boxes_h = unc_ep_boxes_h.cpu().numpy()
-    unc_al_boxes_x = unc_al_boxes[:, 0].cpu().numpy()
-    unc_al_boxes_y = unc_al_boxes[:, 1].cpu().numpy()
-    unc_al_boxes_w = unc_al_boxes[:, 2].cpu().numpy()
-    unc_al_boxes_h = unc_al_boxes[:, 3].cpu().numpy()
-    unc_ep_boxes_x = unc_ep_boxes[:, 0].cpu().numpy()
-    unc_ep_boxes_y = unc_ep_boxes[:, 1].cpu().numpy()
-    unc_ep_boxes_w = unc_ep_boxes[:, 2].cpu().numpy()
-    unc_ep_boxes_h = unc_ep_boxes[:, 3].cpu().numpy()
-    unc_al_clses = unc_al_clses.cpu().numpy()
-    unc_ep_clses = unc_ep_clses.cpu().numpy()
-    
-    bianhao = 0
-    # uabx, uaby, uabw, uabh, uebx, ueby, uebw, uebh, uac, uec
-    for u in zip(unc_al_boxes_x, unc_al_boxes_y, unc_al_boxes_w, unc_al_boxes_h, unc_ep_boxes_x, unc_ep_boxes_y, unc_ep_boxes_w, unc_ep_boxes_h, unc_al_clses, unc_ep_clses):
-        save_unc.write(str(bianhao) + 
-                    str(u) + '\n')
-        bianhao += 1
 
-    unc_al_boxes_x = np.around(unc_al_boxes_x, decimals=2)
-    unc_al_boxes_y = np.around(unc_al_boxes_y, decimals=2)
-    unc_al_boxes_w = np.around(unc_al_boxes_w, decimals=2)
-    unc_al_boxes_h = np.around(unc_al_boxes_h, decimals=2)
-    unc_ep_boxes_x = np.around(unc_ep_boxes_x, decimals=3)
-    unc_ep_boxes_y = np.around(unc_ep_boxes_y, decimals=3)
-    unc_ep_boxes_w = np.around(unc_ep_boxes_w, decimals=3)
-    unc_ep_boxes_h = np.around(unc_ep_boxes_h, decimals=3)
-    unc_al_clses = np.around(unc_al_clses, decimals=3)
-    unc_ep_clses = np.around(unc_ep_clses, decimals=4)
-    unc_al_clses = Counter(unc_al_clses)
-    unc_ep_clses = Counter(unc_ep_clses)
-    unc_al_boxes_x = Counter(unc_al_boxes_x)
-    unc_al_boxes_y = Counter(unc_al_boxes_y)
-    unc_al_boxes_w = Counter(unc_al_boxes_w)
-    unc_al_boxes_h = Counter(unc_al_boxes_h)
-    unc_ep_boxes_x = Counter(unc_ep_boxes_x)
-    unc_ep_boxes_y = Counter(unc_ep_boxes_y)
-    unc_ep_boxes_w = Counter(unc_ep_boxes_w)
-    unc_ep_boxes_h = Counter(unc_ep_boxes_h)
-    unc_al_boxes_x = sorted(unc_al_boxes_x.items(), key=lambda d: d[0])
-    unc_al_boxes_y = sorted(unc_al_boxes_y.items(), key=lambda d: d[0])
-    unc_al_boxes_w = sorted(unc_al_boxes_w.items(), key=lambda d: d[0])
-    unc_al_boxes_h = sorted(unc_al_boxes_h.items(), key=lambda d: d[0])
-    unc_ep_boxes_x = sorted(unc_ep_boxes_x.items(), key=lambda d: d[0])
-    unc_ep_boxes_y = sorted(unc_ep_boxes_y.items(), key=lambda d: d[0])
-    unc_ep_boxes_w = sorted(unc_ep_boxes_w.items(), key=lambda d: d[0])
-    unc_ep_boxes_h = sorted(unc_ep_boxes_h.items(), key=lambda d: d[0])
-    unc_al_clses = sorted(unc_al_clses.items(), key=lambda d: d[0])
-    unc_ep_clses = sorted(unc_ep_clses.items(), key=lambda d: d[0])
-    res1 = [
-        unc_al_boxes_x,
-        unc_al_boxes_y,
-        unc_al_boxes_w,
-        unc_al_boxes_h,
-        unc_al_clses,
-    ]
-    res2 = [
-        unc_ep_boxes_x,
-        unc_ep_boxes_y,
-        unc_ep_boxes_w,
-        unc_ep_boxes_h,
-        unc_ep_clses,
-    ]
-    for r in res1:
-        l1 = [item[0] for item  in r]
-        l2 = [item[1] for item  in r]
-        plt.plot(l1, l2)
-    for r in res2:
-        l1 = [item[0] for item  in r]
-        l2 = [item[1] for item  in r]
-        plt.plot(l1, l2)
+
+
+
+    # unc_al_boxes_x = unc_al_boxes[:, 0].cpu().numpy()
+    # unc_al_boxes_y = unc_al_boxes[:, 1].cpu().numpy()
+    # unc_al_boxes_w = unc_al_boxes[:, 2].cpu().numpy()
+    # unc_al_boxes_h = unc_al_boxes[:, 3].cpu().numpy()
+    # unc_ep_boxes_x = unc_ep_boxes[:, 0].cpu().numpy()
+    # unc_ep_boxes_y = unc_ep_boxes[:, 1].cpu().numpy()
+    # unc_ep_boxes_w = unc_ep_boxes[:, 2].cpu().numpy()
+    # unc_ep_boxes_h = unc_ep_boxes[:, 3].cpu().numpy()
+    # unc_al_clses = unc_al_clses.cpu().numpy()
+    # unc_ep_clses = unc_ep_clses.cpu().numpy()
+    
+    # bianhao = 0
+    # # uabx, uaby, uabw, uabh, uebx, ueby, uebw, uebh, uac, uec
+    # for u in zip(unc_al_boxes_x, unc_al_boxes_y, unc_al_boxes_w, unc_al_boxes_h, unc_ep_boxes_x, unc_ep_boxes_y, unc_ep_boxes_w, unc_ep_boxes_h, unc_al_clses, unc_ep_clses):
+    #     save_unc.write(str(bianhao) + 
+    #                 str(u) + '\n')
+    #     bianhao += 1
+
+    # unc_al_boxes_x = np.around(unc_al_boxes_x, decimals=2)
+    # unc_al_boxes_y = np.around(unc_al_boxes_y, decimals=2)
+    # unc_al_boxes_w = np.around(unc_al_boxes_w, decimals=2)
+    # unc_al_boxes_h = np.around(unc_al_boxes_h, decimals=2)
+    # unc_ep_boxes_x = np.around(unc_ep_boxes_x, decimals=3)
+    # unc_ep_boxes_y = np.around(unc_ep_boxes_y, decimals=3)
+    # unc_ep_boxes_w = np.around(unc_ep_boxes_w, decimals=3)
+    # unc_ep_boxes_h = np.around(unc_ep_boxes_h, decimals=3)
+    # unc_al_clses = np.around(unc_al_clses, decimals=3)
+    # unc_ep_clses = np.around(unc_ep_clses, decimals=4)
+    # unc_al_clses = Counter(unc_al_clses)
+    # unc_ep_clses = Counter(unc_ep_clses)
+    # unc_al_boxes_x = Counter(unc_al_boxes_x)
+    # unc_al_boxes_y = Counter(unc_al_boxes_y)
+    # unc_al_boxes_w = Counter(unc_al_boxes_w)
+    # unc_al_boxes_h = Counter(unc_al_boxes_h)
+    # unc_ep_boxes_x = Counter(unc_ep_boxes_x)
+    # unc_ep_boxes_y = Counter(unc_ep_boxes_y)
+    # unc_ep_boxes_w = Counter(unc_ep_boxes_w)
+    # unc_ep_boxes_h = Counter(unc_ep_boxes_h)
+    # unc_al_boxes_x = sorted(unc_al_boxes_x.items(), key=lambda d: d[0])
+    # unc_al_boxes_y = sorted(unc_al_boxes_y.items(), key=lambda d: d[0])
+    # unc_al_boxes_w = sorted(unc_al_boxes_w.items(), key=lambda d: d[0])
+    # unc_al_boxes_h = sorted(unc_al_boxes_h.items(), key=lambda d: d[0])
+    # unc_ep_boxes_x = sorted(unc_ep_boxes_x.items(), key=lambda d: d[0])
+    # unc_ep_boxes_y = sorted(unc_ep_boxes_y.items(), key=lambda d: d[0])
+    # unc_ep_boxes_w = sorted(unc_ep_boxes_w.items(), key=lambda d: d[0])
+    # unc_ep_boxes_h = sorted(unc_ep_boxes_h.items(), key=lambda d: d[0])
+    # unc_al_clses = sorted(unc_al_clses.items(), key=lambda d: d[0])
+    # unc_ep_clses = sorted(unc_ep_clses.items(), key=lambda d: d[0])
+    # res1 = [
+    #     unc_al_boxes_x,
+    #     unc_al_boxes_y,
+    #     unc_al_boxes_w,
+    #     unc_al_boxes_h,
+    #     unc_al_clses,
+    # ]
+    # res2 = [
+    #     unc_ep_boxes_x,
+    #     unc_ep_boxes_y,
+    #     unc_ep_boxes_w,
+    #     unc_ep_boxes_h,
+    #     unc_ep_clses,
+    # ]
+    # for r in res1:
+    #     l1 = [item[0] for item  in r]
+    #     l2 = [item[1] for item  in r]
+    #     plt.plot(l1, l2)
+    # for r in res2:
+    #     l1 = [item[0] for item  in r]
+    #     l2 = [item[1] for item  in r]
+    #     plt.plot(l1, l2)
     save_unc.close()
 
 
