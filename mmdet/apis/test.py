@@ -145,53 +145,53 @@ def single_gpu_test(model,
 
 
         # add_num_local += add_boxes
-        # if show or out_dir:
-        #     img_metas = data['img_metas'][0].data[0]
-        #     det_bboxes = det_bboxes.cpu().numpy().tolist()
-        #     det_labels = det_labels.cpu().numpy().tolist()
-        #     unc_al_boxes_s = unc_al_boxes.max(dim=-1)[0].cpu().numpy()
-        #     unc_ep_boxes_s = unc_ep_boxes.max(dim=-1)[0].cpu().numpy()
-        #     unc_al_clses_s = unc_al_clses.cpu().numpy()
-        #     unc_ep_clses_s = unc_ep_clses.cpu().numpy()
-
-        #     for i, img_meta in enumerate(img_metas):
-        #         image = Image.open(osp.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/VOC2012', img_meta['ori_filename'])) # 打开一张图片
-        #         for det_bbox, det_label, ab, eb, ac, ec in zip(det_bboxes, det_labels, unc_al_boxes_s, unc_ep_boxes_s, unc_al_clses_s, unc_ep_clses_s):
-        #             if det_bbox[4] > 0.1:
-        #                 draw = ImageDraw.Draw(image) # 在上面画画
-        #                 draw.rectangle(det_bbox[:4], outline=(255,0,0)) 
-        #                 draw.text(det_bbox[:2], str(bianhao) + ' ' + VOC_CLASSES[det_label] + ' ' + str(round(det_bbox[4], 5)), 'fuchsia', font)
-        #                 save_unc.write(str(bianhao) + ' ' +  str(ab) + ' ' +  str(eb) + ' ' +  str(ac) + ' ' +  str(ec) + '\n')
-        #                 bianhao += 1
-        #         image.save(osp.join(out_dir, 'unc', img_meta['ori_filename']))
-
         if show or out_dir:
-            if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
-                img_tensor = data['img'][0]
-            else:
-                img_tensor = data['img'][0].data[0]
             img_metas = data['img_metas'][0].data[0]
-            imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
-            assert len(imgs) == len(img_metas)
+            det_bboxes = det_bboxes.cpu().numpy().tolist()
+            det_labels = det_labels.cpu().numpy().tolist()
+            unc_al_boxes_s = unc_al_boxes.max(dim=-1)[0].cpu().numpy()
+            unc_ep_boxes_s = unc_ep_boxes.max(dim=-1)[0].cpu().numpy()
+            unc_al_clses_s = unc_al_clses.cpu().numpy()
+            unc_ep_clses_s = unc_ep_clses.cpu().numpy()
 
-            for i, (img, img_meta) in enumerate(zip(imgs, img_metas)):
-                h, w, _ = img_meta['img_shape']
-                img_show = img[:h, :w, :]
+            for i, img_meta in enumerate(img_metas):
+                # image = Image.open(osp.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/VOC2012', img_meta['ori_filename'])) # 打开一张图片
+                for det_bbox, det_label, ab, eb, ac, ec in zip(det_bboxes, det_labels, unc_al_boxes_s, unc_ep_boxes_s, unc_al_clses_s, unc_ep_clses_s):
+                    if det_bbox[4] > 0.3:
+                        # draw = ImageDraw.Draw(image) # 在上面画画
+                        # draw.rectangle(det_bbox[:4], outline=(255,0,0)) 
+                        # draw.text(det_bbox[:2], str(bianhao) + ' ' + VOC_CLASSES[det_label] + ' ' + str(round(det_bbox[4], 5)), 'fuchsia', font)
+                        save_unc.write(str(bianhao) + ' ' +  str(ab) + ' ' +  str(eb) + '\n')
+                        bianhao += 1
+                # image.save(osp.join(out_dir, 'unc', img_meta['ori_filename']))
 
-                ori_h, ori_w = img_meta['ori_shape'][:-1]
-                img_show = mmcv.imresize(img_show, (ori_w, ori_h))
+        # if show or out_dir:
+        #     if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
+        #         img_tensor = data['img'][0]
+        #     else:
+        #         img_tensor = data['img'][0].data[0]
+        #     img_metas = data['img_metas'][0].data[0]
+        #     imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
+        #     assert len(imgs) == len(img_metas)
 
-                if out_dir:
-                    out_file = osp.join(out_dir, img_meta['ori_filename'])
-                else:
-                    out_file = None
+        #     for i, (img, img_meta) in enumerate(zip(imgs, img_metas)):
+        #         h, w, _ = img_meta['img_shape']
+        #         img_show = img[:h, :w, :]
 
-                model.module.show_result(
-                    img_show,
-                    result[i],
-                    show=show,
-                    out_file=out_file,
-                    score_thr=show_score_thr)
+        #         ori_h, ori_w = img_meta['ori_shape'][:-1]
+        #         img_show = mmcv.imresize(img_show, (ori_w, ori_h))
+
+        #         if out_dir:
+        #             out_file = osp.join(out_dir, img_meta['ori_filename'])
+        #         else:
+        #             out_file = None
+
+        #         model.module.show_result(
+        #             img_show,
+        #             result[i],
+        #             show=show,
+        #             out_file=out_file,
+        #             score_thr=show_score_thr)
 
         # encode mask results
         if isinstance(result[0], tuple):
