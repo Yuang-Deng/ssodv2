@@ -294,7 +294,7 @@ class GMMBBoxHead(BaseModule):
         sigma_box = F.sigmoid(sigma_box)
 
         max_mu_ep_box = (pi_box * torch.pow(mu_box - (pi_box * mu_box).sum(dim=1)[:, None, :].expand(bbox_pred.size(0), 
-                        gmm_k, mu_box.size(2)), 2)).max(-1)[0].sum(-1)
+                        gmm_k, mu_box.size(2)), 2)).sum(-1).max(-1)[0]
 
         cls_score = cls_score.view(cls_score.size(0), gmm_k, -1)
         pi_cls = cls_score[:, :, -1:]
