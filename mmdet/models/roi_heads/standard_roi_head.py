@@ -173,18 +173,18 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
             img = tensor2imgs(img[None, :, : , :], **img_metas[0]['img_norm_cfg'])
             img = tt.ToPILImage()(img[0])
             Idraw = ImageDraw.Draw(img)
-            for b, l, ac, ec, ab, eb in zip(gt_b, gt_l, acs, ecs, abs, ebs):
-                ac = ac[l]
-                ec = ec[l]
-                ab = ab[l * 4:(l+1) * 4]
-                eb = eb[l * 4:(l+1) * 4]
-                unc = (ac, ec, ab.max(), eb.max())
-                Idraw.rectangle(b[:4].cpu().numpy().tolist(), outline=(255,0,0)) 
-                Idraw.text(b[:2], str(self.bianhao), 'fuchsia', font)
-            self.bianhao += 1
-            img.save(osp.join('./work_dirs/faster_rcnn_r50_fpn_1x_coco_stage1/out', 'unc', i_m['ori_filename']))
-            with open('./work_dirs/faster_rcnn_r50_fpn_1x_coco_stage1/out/gt_unc.txt', 'a') as f:
-                f.write(str(self.bianhao) +  str(unc) + '\n')
+            with open('./work_dirs/faster_rcnn_r50_fpn_1x_coco_stage1/out/unc/gt_unc.txt', 'a') as f:
+                for b, l, ac, ec, ab, eb in zip(gt_b, gt_l, acs, ecs, abs, ebs):
+                    ac = ac[l]
+                    ec = ec[l]
+                    ab = ab[l * 4:(l+1) * 4]
+                    eb = eb[l * 4:(l+1) * 4]
+                    unc = (ac, ec, ab.max(), eb.max())
+                    Idraw.rectangle(b[:4].cpu().numpy().tolist(), outline=(255,0,0)) 
+                    Idraw.text(b[:2], str(self.bianhao), 'fuchsia', font)
+                    self.bianhao += 1
+                    f.write(str(self.bianhao) +  str(unc) + '\n')
+                img.save(osp.join('./work_dirs/faster_rcnn_r50_fpn_1x_coco_stage1/out', 'unc', i_m['ori_filename']))
                 f.close()
 
         
