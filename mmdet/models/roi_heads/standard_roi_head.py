@@ -2,9 +2,16 @@
 import torch
 
 from mmdet.core import bbox2result, bbox2roi, build_assigner, build_sampler
+from mmdet.core.bbox import transforms
 from ..builder import HEADS, build_head, build_roi_extractor
 from .base_roi_head import BaseRoIHead
 from .test_mixins import BBoxTestMixin, MaskTestMixin
+import torch.nn.functional as F
+from PIL import Image, ImageDraw, ImageFont
+from mmcv.image import tensor2imgs
+import torchvision.transforms as tt
+font = ImageFont.truetype("consola.ttf", 20, encoding="unic")
+import os.path as osp
 
 
 @HEADS.register_module()
@@ -15,6 +22,7 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         """Initialize assigner and sampler."""
         self.bbox_assigner = None
         self.bbox_sampler = None
+        self.bianhao = 0
         if self.train_cfg:
             self.bbox_assigner = build_assigner(self.train_cfg.assigner)
             self.bbox_sampler = build_sampler(
@@ -113,6 +121,74 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
             losses.update(mask_results['loss_mask'])
 
         return losses
+    
+    def mem_forward(self, x, gt_bboxes, gt_labels, img_metas, imgs):
+        rois = bbox2roi([res for res in gt_bboxes])
+        split_list = [gl.size(0) for gl in gt_bboxes]
+        bbox_feats = self.bbox_roi_extractor(
+            x[:self.bbox_roi_extractor.num_inputs], rois)
+        mem_gt_label = torch.cat(gt_labels)
+        cls_score, bbox_pred = self.bbox_head(bbox_feats)
+        cls_num = self.bbox_head.num_classes
+        box_rep_len = cls_num * 4
+        gmm_k =  bbox_pred.size(1) // (box_rep_len * 3)
+
+        cls_score = cls_score.view(cls_score.size(0), gmm_k, -1)
+        pi_cls = cls_score[:, :, -1:]
+        mu_cls = cls_score[:, :, :cls_score.size(2) // 2]
+        sigma_cls = cls_score[:, :, cls_score.size(2) // 2:-1]
+
+        pi_cls = F.softmax(pi_cls, dim=1)
+        sigma_cls = F.sigmoid(sigma_cls)
+
+        # c_score = F.softmax(mu_cls, dim=-1)
+
+        # diag = torch.diag(c_score.view(c_score.size(0), -1))
+        # mu_al_cls = (pi_cls.expand(cls_score.size(0), gmm_k, mu_cls.size(2)) * 
+        # (torch.diag(c_score.view(c_score.size(0), -1)) - torch.dot(c_score.view(c_score.size(0), -1) ,c_score.view(c_score.size(0), -1).T)).view(c_score.size(0), gmm_k, -1)).sum(dim=1)
+
+        mu_al_cls = (pi_cls.expand(cls_score.size(0), gmm_k, mu_cls.size(2)) * sigma_cls).sum(dim=1)
+
+        mu_ep_cls = (pi_cls.expand(cls_score.size(0), gmm_k, mu_cls.size(2)) * torch.pow(mu_cls - (pi_cls.expand(cls_score.size(0), gmm_k, mu_cls.size(2)) * mu_cls).sum(dim=1)[:, None, :].expand(cls_score.size(0), 
+                        gmm_k, mu_cls.size(2)), 2)).sum(dim=1)
+
+        bbox_pred = bbox_pred.view(bbox_pred.size(0), 3, -1)
+        mu_box = bbox_pred[:, 0, :].view(bbox_pred.size(0), gmm_k, -1)
+        sigma_box = bbox_pred[:, 1, :].view(bbox_pred.size(0), gmm_k, -1)
+        pi_box = bbox_pred[:, 2, :].view(bbox_pred.size(0), gmm_k, -1)
+
+        pi_box = F.softmax(pi_box, dim=1)
+        sigma_box = F.sigmoid(sigma_box)
+
+        mu_al_box = (pi_box * sigma_box).sum(dim=1)
+        mu_ep_box = (pi_box * torch.pow(mu_box - (pi_box * mu_box).sum(dim=1)[:, None, :].expand(bbox_pred.size(0), 
+                        gmm_k, mu_box.size(2)), 2)).sum(dim=1)
+
+        mu_al_cls = torch.split(mu_al_cls, split_list, dim=0)
+        mu_ep_cls = torch.split(mu_ep_cls, split_list, dim=0)
+        mu_al_box = torch.split(mu_al_box, split_list, dim=0)
+        mu_ep_box = torch.split(mu_ep_box, split_list, dim=0)
+
+        for img, i_m, gt_b, gt_l, acs, ecs, abs, ebs in zip(imgs, img_metas, gt_bboxes, gt_labels, mu_al_cls, mu_ep_cls, mu_al_box, mu_ep_box):
+            img = tensor2imgs(img[None, :, : , :], **img_metas[0]['img_norm_cfg'])
+            img = tt.ToPILImage()(img[0])
+            Idraw = ImageDraw.Draw(img)
+            for b, l, ac, ec, ab, eb in zip(gt_b, gt_l, acs, ecs, abs, ebs):
+                ac = ac[l]
+                ec = ec[l]
+                ab = ab[l * 4:(l+1) * 4]
+                eb = eb[l * 4:(l+1) * 4]
+                unc = (ac, ec, ab.max(), eb.max())
+                Idraw.rectangle(b[:4].cpu().numpy().tolist(), outline=(255,0,0)) 
+                Idraw.text(b[:2], str(self.bianhao), 'fuchsia', font)
+            self.bianhao += 1
+            img.save(osp.join('./work_dirs/faster_rcnn_r50_fpn_1x_coco_stage1/out', 'unc', i_m['ori_filename']))
+            with open('./work_dirs/faster_rcnn_r50_fpn_1x_coco_stage1/out/gt_unc.txt', 'a') as f:
+                f.write(str(self.bianhao) +  str(unc) + '\n')
+                f.close()
+
+        
+
 
     def _bbox_forward(self, x, rois):
         """Box head forward function used in both training and testing."""

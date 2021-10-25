@@ -298,12 +298,12 @@ class GMMBBoxHead(BaseModule):
 
         cls_score = cls_score.view(cls_score.size(0), gmm_k, -1)
         pi_cls = cls_score[:, :, -1:]
-        mu_cls = cls_score[:, :, :-1]
-        # sigma_cls = cls_score[:, :, cls_score.size(2) // 2:-1]
-        # lam_cls = torch.randn(mu_cls.size()).to(mu_cls.device)
+        mu_cls = cls_score[:, :, :cls_score.size(2) // 2]
+        sigma_cls = cls_score[:, :, cls_score.size(2) // 2:-1]
+        lam_cls = torch.randn(mu_cls.size()).to(mu_cls.device)
 
         pi_cls = F.softmax(pi_cls, dim=1)
-        # sigma_cls = F.sigmoid(sigma_cls)
+        sigma_cls = F.sigmoid(sigma_cls)
 
         if bbox_pred is not None:
             bg_class_ind = self.num_classes
@@ -365,8 +365,8 @@ class GMMBBoxHead(BaseModule):
                 # labels_one_hot[labels] = 1
                 # labels = labels[:, None].expand(cls_score.size(0), 4)
                 # cls_p = torch.log(torch.exp(mu_cls).sum(dim=-1))
-                # cls_score = mu_cls + (torch.sqrt(sigma_cls) * lam_cls)
-                cls_score = mu_cls
+                cls_score = mu_cls + (torch.sqrt(sigma_cls) * lam_cls)
+                # cls_score = mu_cls
 
                 inds = torch.arange(0, cls_score.size(0), 1)
                 gt_score = cls_score[inds, :, labels[inds]]
@@ -446,12 +446,12 @@ class GMMBBoxHead(BaseModule):
 
         cls_score = cls_score.view(cls_score.size(0), gmm_k, -1)
         pi_cls = cls_score[:, :, -1:]
-        # mu_cls = cls_score[:, :, :cls_score.size(2) // 2]
-        mu_cls = cls_score[:, :, :-1]
-        # sigma_cls = cls_score[:, :, cls_score.size(2) // 2:-1]
+        # mu_cls = cls_score[:, :, :-1]
+        mu_cls = cls_score[:, :, :cls_score.size(2) // 2]
+        sigma_cls = cls_score[:, :, cls_score.size(2) // 2:-1]
 
         pi_cls = F.softmax(pi_cls, dim=1)
-        # sigma_cls = F.sigmoid(sigma_cls)
+        sigma_cls = F.sigmoid(sigma_cls)
 
         # some loss (Seesaw loss..) may have custom activation
         if self.custom_cls_channels:

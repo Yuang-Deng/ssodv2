@@ -90,7 +90,7 @@ class GMMConvFCBBoxHead(GMMBBoxHead):
             self.fc_cls = build_linear_layer(
                 self.cls_predictor_cfg,
                 in_features=self.cls_last_dim,
-                out_features=cls_channels * self.gmm_k + self.gmm_k)
+                out_features=cls_channels * self.gmm_k * 2 + self.gmm_k)
                 # out_features=cls_channels)
         if self.with_reg:
             out_dim_reg = (4 if self.reg_class_agnostic else 4 *

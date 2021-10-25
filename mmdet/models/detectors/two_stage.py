@@ -157,6 +157,20 @@ class TwoStageDetector(BaseDetector):
             return self._stage2_forward_train(img, img_metas, gt_bboxes, gt_labels, gt_bboxes_ignore,
                          gt_masks, proposals, **kwargs)
 
+    @torch.no_grad()
+    def forward_mem(self,
+                      img,
+                      img_metas,
+                      gt_bboxes,
+                      gt_labels,
+                      gt_bboxes_ignore=None,
+                      gt_masks=None,
+                      proposals=None,
+                      **kwargs):
+        x = self.extract_feat(img)
+
+        self.roi_head.mem_forward(x, gt_bboxes, gt_labels, img_metas, img)
+
     def _stage1_forward_train(self,
                       img,
                       img_metas,

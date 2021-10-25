@@ -32,7 +32,7 @@ model = dict(
 data_root = 'C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/'
 data = dict(
     samples_per_gpu=16,
-    workers_per_gpu=2,
+    workers_per_gpu=0,
     train=dict(
             ann_file=[
                 data_root + 'VOC2007/ImageSets/Main/trainval.txt',
@@ -50,7 +50,7 @@ data = dict(
             )
 )
 optimizer = dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001)
-runner = dict(type='EpochBasedRunner', max_epochs=12)
+runner = dict(type='EpochBasedRunner', max_epochs=13)
 custom_hooks = [dict(type='NumClassCheckHook'), dict(type='RoiEpochSetHook')]
 
 # lr_config = dict(
