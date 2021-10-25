@@ -208,7 +208,7 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
 
         return loss, log_vars
 
-    def train_step(self, data, optimizer, mem_forward=False):
+    def train_step(self, data, optimizer, mem_forward=False, avg_unc=False):
         """The iteration step during training.
 
         This method defines an iteration step during training, except for the
@@ -236,6 +236,9 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
                   averaging the logs.
         """
         if mem_forward:
+            if avg_unc:
+                self.forward_mem_avg_unc()
+                return
             self.forward_mem(**data)
             return
         losses = self(**data)
@@ -248,6 +251,10 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
 
     @abstractmethod
     def forward_mem():
+        pass
+
+    @abstractmethod
+    def forward_mem_avg_unc():
         pass
 
     def val_step(self, data, optimizer=None):

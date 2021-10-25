@@ -170,6 +170,10 @@ class TwoStageDetector(BaseDetector):
         x = self.extract_feat(img)
 
         self.roi_head.mem_forward(x, gt_bboxes, gt_labels, img_metas, img)
+    
+    @torch.no_grad()
+    def forward_mem_avg_unc(self):
+        self.roi_head.forward_mem_avg_unc()
 
     def _stage1_forward_train(self,
                       img,

@@ -68,6 +68,7 @@ class GtUncHook(Hook):
     def _mem_forward(self, runner):
         for i, data in enumerate(self.dataloader):
             runner.model.train_step(data, None, mem_forward=True)
+        runner.model.train_step(None, None, mem_forward=True, avg_unc=True)
         
         print('ok')
 
@@ -109,6 +110,7 @@ class DistGtUncHook(GtUncHook):
         # print(len(self.dataloader))
         for i, data in enumerate(self.dataloader):
             runner.model.train_step(data, None, mem_forward=True)
+            runner.model.train_step(None, None, mem_forward=True, avg_unc=True)
 
         time_end=time.time()
         print('time cost',time_end-time_start,'s')

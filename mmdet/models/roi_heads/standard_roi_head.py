@@ -13,6 +13,11 @@ import torchvision.transforms as tt
 font = ImageFont.truetype("consola.ttf", 20, encoding="unic")
 import os.path as osp
 
+VOC_CLASSES = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car',
+               'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse',
+               'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train',
+               'tvmonitor']
+
 
 @HEADS.register_module()
 class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
@@ -32,6 +37,11 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         """Initialize ``bbox_head``"""
         self.bbox_roi_extractor = build_roi_extractor(bbox_roi_extractor)
         self.bbox_head = build_head(bbox_head)
+        self.unc_al_boxes = torch.zeros([0, 4]).to('cuda')
+        self.unc_ep_boxes = torch.zeros([0, 4]).to('cuda')
+        self.unc_al_clses = torch.zeros([0]).to('cuda')
+        self.unc_ep_clses = torch.zeros([0]).to('cuda')
+        self.all_det_labels = torch.zeros([0]).to('cuda').long()
 
     def init_mask_head(self, mask_roi_extractor, mask_head):
         """Initialize ``mask_head``"""
@@ -170,25 +180,39 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         mu_ep_box = torch.split(mu_ep_box, split_list, dim=0)
 
         for img, i_m, gt_b, gt_l, acs, ecs, abs, ebs in zip(imgs, img_metas, gt_bboxes, gt_labels, mu_al_cls, mu_ep_cls, mu_al_box, mu_ep_box):
-            img = tensor2imgs(img[None, :, : , :], **img_metas[0]['img_norm_cfg'])
-            img = tt.ToPILImage()(img[0])
-            Idraw = ImageDraw.Draw(img)
+            # img = tensor2imgs(img[None, :, : , :], **img_metas[0]['img_norm_cfg'])
+            # img = tt.ToPILImage()(img[0])
+            # Idraw = ImageDraw.Draw(img)
             with open('./work_dirs/faster_rcnn_r50_fpn_1x_coco_stage1/out/unc/gt_unc.txt', 'a') as f:
                 for b, l, ac, ec, ab, eb in zip(gt_b, gt_l, acs, ecs, abs, ebs):
                     ac = ac[l]
                     ec = ec[l]
                     ab = ab[l * 4:(l+1) * 4]
                     eb = eb[l * 4:(l+1) * 4]
-                    unc = (ac, ec, ab.max(), eb.max())
-                    Idraw.rectangle(b[:4].cpu().numpy().tolist(), outline=(255,0,0)) 
-                    Idraw.text(b[:2], str(self.bianhao), 'fuchsia', font)
-                    self.bianhao += 1
-                    f.write(str(self.bianhao) +  str(unc) + '\n')
-                img.save(osp.join('./work_dirs/faster_rcnn_r50_fpn_1x_coco_stage1/out', 'unc', i_m['ori_filename']))
+                    self.unc_al_boxes = torch.cat([self.unc_al_boxes, ab[None, :]])
+                    self.unc_ep_boxes = torch.cat([self.unc_ep_boxes, eb[None, :]])
+                    self.unc_al_clses = torch.cat([self.unc_al_clses, ac[None]])
+                    self.unc_ep_clses = torch.cat([self.unc_ep_clses, ec[None]])
+                    self.all_det_labels = torch.cat([self.all_det_labels, l[None]])
+                #     unc = (ac, ec, ab.max(), eb.max())
+                #     Idraw.rectangle(b[:4].cpu().numpy().tolist(), outline=(255,0,0)) 
+                #     Idraw.text(b[:2], str(self.bianhao), 'fuchsia', font)
+                #     self.bianhao += 1
+                #     f.write(str(self.bianhao) +  str(unc) + '\n')
+                # img.save(osp.join('./work_dirs/faster_rcnn_r50_fpn_1x_coco_stage1/out', 'unc', i_m['ori_filename']))
                 f.close()
 
-        
-
+    def forward_mem_avg_unc(self):
+        with open('./work_dirs/faster_rcnn_r50_fpn_1x_coco_stage1/out/unc/gt_unc_static.txt', 'a') as f:
+            for i in range(20):
+                inds = self.all_det_labels == i
+                unc_al_boxes_static = self.unc_al_boxes[inds].max(dim=-1)[0].mean()
+                unc_ep_boxes_static = self.unc_ep_boxes[inds].max(dim=-1)[0].mean()
+                unc_al_clses_static = self.unc_al_clses[inds].mean()
+                unc_ep_clses_static = self.unc_ep_clses[inds].mean()
+                f.write(VOC_CLASSES[i] + ' ' + str(unc_al_boxes_static.item()) + ' ' + str(unc_ep_boxes_static.item())
+                 + ' ' + str(unc_al_clses_static.item()) + ' ' + str(unc_ep_clses_static.item()) + '\n')
+            f.close()
 
     def _bbox_forward(self, x, rois):
         """Box head forward function used in both training and testing."""
