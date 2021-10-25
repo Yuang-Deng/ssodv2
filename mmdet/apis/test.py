@@ -53,6 +53,7 @@ def single_gpu_test(model,
     unc_ep_boxes = torch.zeros([0, 4]).to('cuda')
     unc_al_clses = torch.zeros([0]).to('cuda')
     unc_ep_clses = torch.zeros([0]).to('cuda')
+    all_det_labels = torch.zeros([0]).to('cuda')
     prog_bar = mmcv.ProgressBar(len(dataset))
     bianhao = 0
     save_unc = open('./work_dirs/faster_rcnn_r50_fpn_1x_coco_stage1/out/unc/unc.txt', 'w')
@@ -77,6 +78,7 @@ def single_gpu_test(model,
                 unc_ep_boxes = torch.cat([unc_ep_boxes, mu_ep_boxes])
                 unc_al_clses = torch.cat([unc_al_clses, mu_al_clses])
                 unc_ep_clses = torch.cat([unc_ep_clses, mu_ep_clses])
+                all_det_labels = torch.cat([all_det_labels, det_labels])
             result = result[0]
             # for label, mu_al_box, mu_ep_box, mu_al_cls, mu_ep_cls in zip(det_labels, mu_al_boxes, mu_ep_boxes, mu_al_clses, mu_ep_clses):
             
@@ -145,25 +147,26 @@ def single_gpu_test(model,
 
 
         # add_num_local += add_boxes
-        if show or out_dir:
-            img_metas = data['img_metas'][0].data[0]
-            det_bboxes = det_bboxes.cpu().numpy().tolist()
-            det_labels = det_labels.cpu().numpy().tolist()
-            unc_al_boxes_s = mu_al_boxes.max(dim=-1)[0].cpu().numpy()
-            unc_ep_boxes_s = mu_ep_boxes.max(dim=-1)[0].cpu().numpy()
-            unc_al_clses_s = mu_al_clses.cpu().numpy()
-            unc_ep_clses_s = mu_ep_clses.cpu().numpy()
 
-            for i, img_meta in enumerate(img_metas):
-                image = Image.open(osp.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/VOC2012', img_meta['ori_filename'])) # 打开一张图片
-                for det_bbox, det_label, ab, eb, ac, ec in zip(det_bboxes, det_labels, unc_al_boxes_s, unc_ep_boxes_s, unc_al_clses_s, unc_ep_clses_s):
-                    if det_bbox[4] > 0.3:
-                        draw = ImageDraw.Draw(image) # 在上面画画
-                        draw.rectangle(det_bbox[:4], outline=(255,0,0)) 
-                        draw.text(det_bbox[:2], str(bianhao) + ' ' + VOC_CLASSES[det_label] + ' ' + str(round(det_bbox[4], 5)), 'fuchsia', font)
-                        save_unc.write(str(bianhao) + ' ' +  str(ab) + ' ' +  str(eb) + ' ' +  str(ac) + ' ' +  str(ec) + '\n')
-                        bianhao += 1
-                image.save(osp.join(out_dir, 'unc', img_meta['ori_filename']))
+        # if show or out_dir:
+        #     img_metas = data['img_metas'][0].data[0]
+        #     det_bboxes = det_bboxes.cpu().numpy().tolist()
+        #     det_labels = det_labels.cpu().numpy().tolist()
+        #     unc_al_boxes_s = mu_al_boxes.max(dim=-1)[0].cpu().numpy()
+        #     unc_ep_boxes_s = mu_ep_boxes.max(dim=-1)[0].cpu().numpy()
+        #     unc_al_clses_s = mu_al_clses.cpu().numpy()
+        #     unc_ep_clses_s = mu_ep_clses.cpu().numpy()
+
+        #     for i, img_meta in enumerate(img_metas):
+        #         image = Image.open(osp.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/VOC2012', img_meta['ori_filename'])) # 打开一张图片
+        #         for det_bbox, det_label, ab, eb, ac, ec in zip(det_bboxes, det_labels, unc_al_boxes_s, unc_ep_boxes_s, unc_al_clses_s, unc_ep_clses_s):
+        #             if det_bbox[4] > 0.3:
+        #                 draw = ImageDraw.Draw(image) # 在上面画画
+        #                 draw.rectangle(det_bbox[:4], outline=(255,0,0)) 
+        #                 draw.text(det_bbox[:2], str(bianhao) + ' ' + VOC_CLASSES[det_label] + ' ' + str(round(det_bbox[4], 5)), 'fuchsia', font)
+        #                 save_unc.write(str(bianhao) + ' ' +  str(ab) + ' ' +  str(eb) + ' ' +  str(ac) + ' ' +  str(ec) + '\n')
+        #                 bianhao += 1
+        #         image.save(osp.join(out_dir, 'unc', img_meta['ori_filename']))
 
         # if show or out_dir:
         #     if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
@@ -201,6 +204,21 @@ def single_gpu_test(model,
 
         for _ in range(batch_size):
             prog_bar.update()
+
+    for i in range(20):
+        inds = all_det_labels == i
+        unc_al_boxes_static = unc_al_boxes[inds].max(dim=-1)[0].mean()
+        unc_ep_boxes_static = unc_ep_boxes[inds].max(dim=-1)[0].mean()
+        unc_al_clses_static = unc_al_clses[inds].mean()
+        unc_ep_clses_static = unc_ep_clses[inds].mean()
+        print(VOC_CLASSES[i], unc_al_boxes_static.item(), unc_ep_boxes_static.item(), unc_al_clses_static.item(), unc_ep_clses_static.item())
+
+        
+
+
+
+
+
     # print()
     # print(add_num)
     # print(pseudo_num)
@@ -300,61 +318,6 @@ def single_gpu_test(model,
     #     l2 = [item[1] for item  in r]
     #     plt.plot(l1, l2)
     save_unc.close()
-
-
-
-
-    # unc_al_boxes_x_sta = [0] * 100
-    # unc_al_boxes_y_sta = [0] * 100
-    # unc_al_boxes_w_sta = [0] * 100
-    # unc_al_boxes_h_sta = [0] * 100
-    # unc_ep_boxes_x_sta = [0] * 100
-    # unc_ep_boxes_y_sta = [0] * 100
-    # unc_ep_boxes_w_sta = [0] * 100
-    # unc_ep_boxes_h_sta = [0] * 100
-    # unc_al_clses_sta = [0] * 100
-    # unc_ep_clses_sta = [0] * 100
-    # pre = 0
-    # local_list = [i * 0.01 for i in range(1, 101)]
-    # for qj, index in zip(local_list, range(100)):
-    #     for unc in unc_al_boxes_x:
-    #         if unc < qj and unc >= pre:
-    #             unc_al_boxes_x_sta[index] += 1
-    #     for unc in unc_al_boxes_y:
-    #         if unc < qj and unc >= pre:
-    #             unc_al_boxes_y_sta[index] += 1
-    #     for unc in unc_al_boxes_w:
-    #         if unc < qj and unc >= pre:
-    #             unc_al_boxes_w_sta[index] += 1
-    #     for unc in unc_al_boxes_h:
-    #         if unc < qj and unc >= pre:
-    #             unc_al_boxes_h_sta[index] += 1
-    #     for unc in unc_al_clses:
-    #         if unc < qj and unc >= pre:
-    #             unc_al_clses_sta[index] += 1
-    #     # for unc in unc_ep_boxes_x:
-    #         # if unc < qj and unc >= pre:
-    #             # unc_ep_boxes_x_sta[index] += 1
-    #     # for unc in unc_ep_boxes_y:
-    #         # if unc < qj and unc >= pre:
-    #             # unc_ep_boxes_y_sta[index] += 1
-    #     # for unc in unc_ep_boxes_w:
-    #         # if unc < qj and unc >= pre:
-    #             # unc_ep_boxes_w_sta[index] += 1
-    #     # for unc in unc_ep_boxes_h:
-    #         # if unc < qj and unc >= pre:
-    #             # unc_ep_boxes_h_sta[index] += 1
-    #     pre = qj
-    # plt.bar(range(len(unc_al_boxes_x_sta)), unc_al_boxes_x_sta)
-    # plt.show()
-    # plt.bar(range(len(unc_al_boxes_y_sta)), unc_al_boxes_y_sta)
-    # plt.show()
-    # plt.bar(range(len(unc_al_boxes_w_sta)), unc_al_boxes_w_sta)
-    # plt.show()
-    # plt.bar(range(len(unc_al_boxes_h_sta)), unc_al_boxes_h_sta)
-    # plt.show()
-    # plt.bar(range(len(unc_al_clses_sta)), unc_al_clses_sta)
-    # plt.show()
         
     return results
 
