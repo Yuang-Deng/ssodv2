@@ -394,18 +394,18 @@ class GMMBBoxHead(BaseModule):
 
         cls_score = cls_score.view(cls_score.size(0), gmm_k, -1)
         pi_cls = cls_score[:, :, -1:]
-        mu_cls = cls_score[:, :, :-1]
-        # sigma_cls = cls_score[:, :, cls_score.size(2) // 2:-1]
-        # lam_cls = torch.randn(mu_cls.size()).to(mu_cls.device)
+        mu_cls = cls_score[:, :, :cls_score.size(2) // 2]
+        sigma_cls = cls_score[:, :, cls_score.size(2) // 2:-1]
+        lam_cls = torch.randn(mu_cls.size()).to(mu_cls.device)
 
         pi_cls = F.softmax(pi_cls, dim=1)
 
-        # mu_al_cls = (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * sigma_cls).sum(dim=1)
-        # mu_ep_cls = (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * torch.pow(mu_cls - (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * mu_cls).sum(dim=1)[:, None, :].expand(cls_score.size(0), 
-        #                 gmm_k, sigma_cls.size(2)), 2)).sum(dim=1)
+        mu_al_cls = (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * sigma_cls).sum(dim=1)
+        mu_ep_cls = (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * torch.pow(mu_cls - (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * mu_cls).sum(dim=1)[:, None, :].expand(cls_score.size(0), 
+                        gmm_k, sigma_cls.size(2)), 2)).sum(dim=1)
 
-        mu_al_cls = mu_cls.sum(1)
-        mu_ep_cls = mu_cls.sum(1)
+        # mu_al_cls = mu_cls.sum(1)
+        # mu_ep_cls = mu_cls.sum(1)
 
         # some loss (Seesaw loss..) may have custom activation
         if self.custom_cls_channels:

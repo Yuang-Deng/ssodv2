@@ -149,21 +149,21 @@ def single_gpu_test(model,
             img_metas = data['img_metas'][0].data[0]
             det_bboxes = det_bboxes.cpu().numpy().tolist()
             det_labels = det_labels.cpu().numpy().tolist()
-            unc_al_boxes_s = unc_al_boxes.max(dim=-1)[0].cpu().numpy()
-            unc_ep_boxes_s = unc_ep_boxes.max(dim=-1)[0].cpu().numpy()
-            unc_al_clses_s = unc_al_clses.cpu().numpy()
-            unc_ep_clses_s = unc_ep_clses.cpu().numpy()
+            unc_al_boxes_s = mu_al_boxes.max(dim=-1)[0].cpu().numpy()
+            unc_ep_boxes_s = mu_ep_boxes.max(dim=-1)[0].cpu().numpy()
+            unc_al_clses_s = mu_al_clses.cpu().numpy()
+            unc_ep_clses_s = mu_ep_clses.cpu().numpy()
 
             for i, img_meta in enumerate(img_metas):
-                # image = Image.open(osp.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/VOC2012', img_meta['ori_filename'])) # 打开一张图片
+                image = Image.open(osp.join('C:/Users/Alex/WorkSpace/dataset/voc/VOCdevkit/VOC2012', img_meta['ori_filename'])) # 打开一张图片
                 for det_bbox, det_label, ab, eb, ac, ec in zip(det_bboxes, det_labels, unc_al_boxes_s, unc_ep_boxes_s, unc_al_clses_s, unc_ep_clses_s):
                     if det_bbox[4] > 0.3:
-                        # draw = ImageDraw.Draw(image) # 在上面画画
-                        # draw.rectangle(det_bbox[:4], outline=(255,0,0)) 
-                        # draw.text(det_bbox[:2], str(bianhao) + ' ' + VOC_CLASSES[det_label] + ' ' + str(round(det_bbox[4], 5)), 'fuchsia', font)
-                        save_unc.write(str(bianhao) + ' ' +  str(ab) + ' ' +  str(eb) + '\n')
+                        draw = ImageDraw.Draw(image) # 在上面画画
+                        draw.rectangle(det_bbox[:4], outline=(255,0,0)) 
+                        draw.text(det_bbox[:2], str(bianhao) + ' ' + VOC_CLASSES[det_label] + ' ' + str(round(det_bbox[4], 5)), 'fuchsia', font)
+                        save_unc.write(str(bianhao) + ' ' +  str(ab) + ' ' +  str(eb) + ' ' +  str(ac) + ' ' +  str(ec) + '\n')
                         bianhao += 1
-                # image.save(osp.join(out_dir, 'unc', img_meta['ori_filename']))
+                image.save(osp.join(out_dir, 'unc', img_meta['ori_filename']))
 
         # if show or out_dir:
         #     if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
