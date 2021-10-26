@@ -154,18 +154,18 @@ def train_detector(model,
         runner.register_hook(
             eval_hook(val_dataloader, **eval_cfg), priority='LOW')
 
-    if mem:
-        mem_dataset = build_dataset(cfg.data.mem)
-        mem_dataloader = build_dataloader(
-            mem_dataset,
-            samples_per_gpu=cfg.data.samples_per_gpu,
-            workers_per_gpu=cfg.data.workers_per_gpu,
-            num_gpus=len(cfg.gpu_ids),
-            dist=distributed,
-            shuffle=False)
-        mem_hook = DistGtUncHook if distributed else GtUncHook
-        runner.register_hook(
-            mem_hook(mem_dataloader), priority='LOW')
+    # if mem:
+    #     mem_dataset = build_dataset(cfg.data.mem)
+    #     mem_dataloader = build_dataloader(
+    #         mem_dataset,
+    #         samples_per_gpu=cfg.data.samples_per_gpu,
+    #         workers_per_gpu=cfg.data.workers_per_gpu,
+    #         num_gpus=len(cfg.gpu_ids),
+    #         dist=distributed,
+    #         shuffle=False)
+    #     mem_hook = DistGtUncHook if distributed else GtUncHook
+    #     runner.register_hook(
+    #         mem_hook(mem_dataloader), priority='LOW')
 
 
     # user-defined hooks
