@@ -44,6 +44,8 @@ class GMMBBoxHead(BaseModule):
                  cls_lambda=1,
                  lam_box_loss=1,
                  warm_epoch=2,
+                 unc_type='al',
+                 lambda_unc=1,
                  init_cfg=None):
         super(GMMBBoxHead, self).__init__(init_cfg)
         assert with_cls or with_reg
@@ -63,6 +65,8 @@ class GMMBBoxHead(BaseModule):
         self.cls_lambda = cls_lambda
         self.lam_box_loss = lam_box_loss
         self.warm_epoch = warm_epoch
+        self.unc_type = unc_type
+        self.lambda_unc = lambda_unc
 
         self.bbox_coder = build_bbox_coder(bbox_coder)
         self.loss_cls = build_loss(loss_cls)
@@ -295,7 +299,8 @@ class GMMBBoxHead(BaseModule):
              label_weights,
              bbox_targets,
              bbox_weights,
-             reduction_override=None):
+             reduction_override=None,
+             unc=False):
         losses = dict()
         
         cls_num = self.num_classes
@@ -314,6 +319,11 @@ class GMMBBoxHead(BaseModule):
         mu_al_box = (pi_box * sigma_box).sum(dim=1)
         mu_ep_box = (pi_box * torch.pow(mu_box - (pi_box * mu_box).sum(dim=1)[:, None, :].expand(bbox_pred.size(0), 
                         gmm_k, mu_box.size(2)), 2)).sum(dim=1)
+
+        if self.unc_type == 'al':
+            unc_logit = mu_al_box
+        elif self.unc_type == 'ep':
+            unc_logit = mu_ep_box
 
         max_mu_ep_box = (pi_box * torch.pow(mu_box - (pi_box * mu_box).sum(dim=1)[:, None, :].expand(bbox_pred.size(0), 
                         gmm_k, mu_box.size(2)), 2)).sum(dim=1).max(-1)[0]
@@ -372,25 +382,26 @@ class GMMBBoxHead(BaseModule):
             else:
                 losses['loss_bbox'] = bbox_pred[pos_inds].sum()
             
-            # gt unc loss 先获取gt的unc，再计算pos的
-            split_list = [sr.bboxes.size(0) for sr in sampling_results]
-            device = bbox_pred.device
-            batch = split_list[0]
-            pos_inds = torch.zeros([0]).to(device).long()
-            pos_gt_map = torch.zeros([0]).to(device).long()
-            # pos_label = torch.zeros([0]).to(device).long()
-            for i, res in enumerate(sampling_results):
-                pos_inds = torch.cat([pos_inds, (torch.arange(0, res.pos_inds.size(0) - 1).to(device).long() + (i * batch)).view(-1)])
-                pos_gt_map = torch.cat([pos_gt_map, (res.pos_assigned_gt_inds+ (i * batch)).view(-1)])
-                # pos_label = torch.cat([pos_label, (res.pos_gt_labels+ (i * batch)).view(-1)])
-            target_unc = mu_ep_box.view(mu_ep_box.size(0), cls_num, 4)[pos_gt_map, labels[pos_gt_map], :]
-            logit_unc = mu_ep_box.view(mu_ep_box.size(0), cls_num, 4)[pos_inds, labels[pos_inds], :]
-            losses['loss_unc'] = self.loss_unc(
-                    logit_unc,
-                    target_unc,
-                    bbox_weights[pos_inds],
-                    avg_factor=bbox_targets.size(0),
-                    reduction_override=reduction_override)
+            if unc:
+                # gt unc loss 先获取gt的unc，再计算pos的
+                split_list = [sr.bboxes.size(0) for sr in sampling_results]
+                device = bbox_pred.device
+                batch = split_list[0]
+                pos_inds = torch.zeros([0]).to(device).long()
+                pos_gt_map = torch.zeros([0]).to(device).long()
+                # pos_label = torch.zeros([0]).to(device).long()
+                for i, res in enumerate(sampling_results):
+                    pos_inds = torch.cat([pos_inds, (torch.arange(0, res.pos_inds.size(0)).to(device).long() + (i * batch)).view(-1)])
+                    pos_gt_map = torch.cat([pos_gt_map, (res.pos_assigned_gt_inds+ (i * batch)).view(-1)])
+                    # pos_label = torch.cat([pos_label, (res.pos_gt_labels+ (i * batch)).view(-1)])
+                target_unc = mu_ep_box.view(mu_ep_box.size(0), cls_num, 4)[pos_gt_map, labels[pos_gt_map], :]
+                logit_unc = mu_ep_box.view(mu_ep_box.size(0), cls_num, 4)[pos_inds, labels[pos_inds], :]
+                losses['loss_unc'] = self.loss_unc(
+                        logit_unc,
+                        target_unc,
+                        bbox_weights[pos_inds],
+                        avg_factor=bbox_targets.size(0),
+                        reduction_override=reduction_override) * self.lambda_unc
             
         
         if cls_score is not None:
