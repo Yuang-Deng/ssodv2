@@ -45,7 +45,8 @@ class GMMBBoxHead(BaseModule):
                  lam_box_loss=1,
                  warm_epoch=2,
                  unc_type='al',
-                 lambda_unc=1,
+                 lambda_unc_box=1,
+                 lambda_unc_cls=1,
                  init_cfg=None):
         super(GMMBBoxHead, self).__init__(init_cfg)
         assert with_cls or with_reg
@@ -66,7 +67,8 @@ class GMMBBoxHead(BaseModule):
         self.lam_box_loss = lam_box_loss
         self.warm_epoch = warm_epoch
         self.unc_type = unc_type
-        self.lambda_unc = lambda_unc
+        self.lambda_unc_box = lambda_unc_box
+        self.lambda_unc_cls = lambda_unc_cls
 
         self.bbox_coder = build_bbox_coder(bbox_coder)
         self.loss_cls = build_loss(loss_cls)
@@ -320,11 +322,6 @@ class GMMBBoxHead(BaseModule):
         mu_ep_box = (pi_box * torch.pow(mu_box - (pi_box * mu_box).sum(dim=1)[:, None, :].expand(bbox_pred.size(0), 
                         gmm_k, mu_box.size(2)), 2)).sum(dim=1)
 
-        if self.unc_type == 'al':
-            unc_logit = mu_al_box
-        elif self.unc_type == 'ep':
-            unc_logit = mu_ep_box
-
         max_mu_ep_box = (pi_box * torch.pow(mu_box - (pi_box * mu_box).sum(dim=1)[:, None, :].expand(bbox_pred.size(0), 
                         gmm_k, mu_box.size(2)), 2)).sum(dim=1).max(-1)[0]
 
@@ -336,6 +333,17 @@ class GMMBBoxHead(BaseModule):
 
         pi_cls = F.softmax(pi_cls, dim=1)
         sigma_cls = F.sigmoid(sigma_cls)
+
+        mu_al_cls = (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * sigma_cls).sum(dim=1)
+        mu_ep_cls = (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * torch.pow(mu_cls - (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * mu_cls).sum(dim=1)[:, None, :].expand(cls_score.size(0), 
+                        gmm_k, sigma_cls.size(2)), 2)).sum(dim=1)
+
+        if self.unc_type == 'al':
+            box_unc_logit = mu_al_box
+            cls_unc_logit = mu_al_cls
+        elif self.unc_type == 'ep':
+            box_unc_logit = mu_ep_box
+            cls_unc_logit = mu_ep_cls
 
         if bbox_pred is not None:
             bg_class_ind = self.num_classes
@@ -394,16 +402,25 @@ class GMMBBoxHead(BaseModule):
                     pos_inds = torch.cat([pos_inds, (torch.arange(0, res.pos_inds.size(0)).to(device).long() + (i * batch)).view(-1)])
                     pos_gt_map = torch.cat([pos_gt_map, (res.pos_assigned_gt_inds+ (i * batch)).view(-1)])
                     # pos_label = torch.cat([pos_label, (res.pos_gt_labels+ (i * batch)).view(-1)])
-                target_unc = unc_logit.view(unc_logit.size(0), cls_num, 4).max(dim=-1)[0][pos_gt_map, labels[pos_gt_map]]
-                logit_unc = unc_logit.view(unc_logit.size(0), cls_num, 4).max(dim=-1)[0][pos_inds, labels[pos_inds]]
+                
+                box_target_unc = box_unc_logit.view(box_unc_logit.size(0), cls_num, 4).max(dim=-1)[0][pos_gt_map, labels[pos_gt_map]]
+                box_logit_unc = box_unc_logit.view(box_unc_logit.size(0), cls_num, 4).max(dim=-1)[0][pos_inds, labels[pos_inds]]
                 bbox_weights = torch.ones_like(bbox_weights)
-                losses['loss_unc'] = self.loss_unc(
-                        logit_unc[:, None],
-                        target_unc[:, None],
+                losses['loss_unc_box'] = self.loss_unc(
+                        box_logit_unc[:, None],
+                        box_target_unc[:, None],
                         bbox_weights[pos_inds, 0],
-                        avg_factor=target_unc.size(0),
-                        reduction_override=reduction_override) * self.lambda_unc
-                print(losses['loss_unc'])
+                        avg_factor=box_target_unc.size(0),
+                        reduction_override=reduction_override) * self.lambda_unc_box
+                
+                cls_target_unc = cls_unc_logit[pos_gt_map, labels[pos_gt_map]]
+                cls_logit_unc = cls_unc_logit[pos_inds, labels[pos_inds]]
+                losses['loss_unc_cls'] = abs(cls_target_unc - cls_logit_unc).mean() * self.lambda_unc_cls
+
+
+
+                
+                print(losses['loss_unc_cls'])
             
         
         if cls_score is not None:
