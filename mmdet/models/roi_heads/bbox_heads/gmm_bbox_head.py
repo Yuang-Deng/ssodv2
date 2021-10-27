@@ -394,14 +394,14 @@ class GMMBBoxHead(BaseModule):
                     pos_inds = torch.cat([pos_inds, (torch.arange(0, res.pos_inds.size(0)).to(device).long() + (i * batch)).view(-1)])
                     pos_gt_map = torch.cat([pos_gt_map, (res.pos_assigned_gt_inds+ (i * batch)).view(-1)])
                     # pos_label = torch.cat([pos_label, (res.pos_gt_labels+ (i * batch)).view(-1)])
-                target_unc = unc_logit.view(unc_logit.size(0), cls_num, 4)[pos_gt_map, labels[pos_gt_map], :]
-                logit_unc = unc_logit.view(unc_logit.size(0), cls_num, 4)[pos_inds, labels[pos_inds], :]
+                target_unc = unc_logit.view(unc_logit.size(0), cls_num, 4).max(dim=-1)[0][pos_gt_map, labels[pos_gt_map]]
+                logit_unc = unc_logit.view(unc_logit.size(0), cls_num, 4).max(dim=-1)[0][pos_inds, labels[pos_inds]]
                 bbox_weights = torch.ones_like(bbox_weights)
                 losses['loss_unc'] = self.loss_unc(
-                        logit_unc,
-                        target_unc,
-                        bbox_weights[pos_inds],
-                        avg_factor=bbox_targets.size(0),
+                        logit_unc[:, None],
+                        target_unc[:, None],
+                        bbox_weights[pos_inds, 0],
+                        avg_factor=target_unc.size(0),
                         reduction_override=reduction_override) * self.lambda_unc
                 print(losses['loss_unc'])
             
