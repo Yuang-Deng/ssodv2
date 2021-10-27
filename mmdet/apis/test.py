@@ -54,66 +54,10 @@ def single_gpu_test(model,
             flag = True
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
-            if flag:
-                # for idx, (d, tags_img, box_img, r) in enumerate(zip(data['img_metas'], tags, box, result)):
-                #     l1 = 0
-                #     for bb in r:
-                #         l1 += len(bb)
-                #     l2 = box_img.shape[1]
-                #     boxfornms = torch.zeros([l1+l2,80])
-                #     labelfornms = torch.zeros([l1+l2,21])
-                #     index = 0
-                #     for i in range(len(r)):
-                #         bb = r[i]
-                #         for b in bb:
-                #             if b[4] >= show_score_thr:
-                #                 boxfornms[index, i*4:(i+1)*4] = b[:4]
-                #                 labelfornms[index, i] = b[4]
-                #                 index += 1
-                #     for b, t in zip(box_img, tags_img):
-                #         boxfornms[index, tags_img*4:(tags_img+1)*4] = b[:]
-                #         labelfornms[index, tags_img] = show_score_thr - 0.1
-                #         index += 1
-                # nms_cfg = {'type': 'nms', 'iou_threshold': 0.5}
-                # multiclass_nms(boxfornms, labelfornms, show_score_thr - 0.11, nms_cfg,
-                #                                     100)
-                cur_add_num, cur_pseudo_num = gen_voc_label(data, result, tags, box, box, [show_score_thr] * len(VOC_CLASSES))
-                # for i in range(len(cur_add_num)):
-                #     add_num[i] += cur_add_num[i]
-                # for i in range(len(cur_pseudo_num)):
-                #     pseudo_num[i] += cur_pseudo_num[i]
-                # for k, v in cur_add_num.items():
-                #     k = k.item()
-                #     if k not in add_num.keys():
-                #         add_num[k] = 0
-                #     add_num[k] += v
-                # for k, v in cur_pseudo_num.items():
-                #     k = k.item()
-                #     if k not in pseudo_num.keys():
-                #         pseudo_num[k] = 0
-                #     pseudo_num[k] += v
+            # if flag:
+            #     cur_add_num, cur_pseudo_num = gen_voc_label(data, result, tags, box, box, [show_score_thr] * len(VOC_CLASSES))
         batch_size = len(result)
         add_boxes = 0
-        # for i in range(len(result[0])):
-        #     result[0][i] = np.zeros([0,5])
-        # for b, t in zip(ori_box[0], tags[0]):
-        #     for bb,tt in zip(b,t):
-                # k_t = tt.item()
-                # if k_t not in ori_num.keys():
-                #     ori_num[k_t] = 0
-                # ori_num[tt.item()] += 1
-                # bb = bb.numpy()
-                # flag = True
-                # for r in result[0]:
-                #     for rb in r:
-                #         if cal_iou(bb,rb[:4]) > 0.3 and rb[4] > show_score_thr:
-                #             flag = False
-                # if flag:
-                #     add_boxes += 1
-                #     zero = np.ones([1])
-                #     add_b = np.concatenate([bb, zero])
-                #     result[0][0] = np.concatenate([result[0][0], add_b[None,:]])
-        # print(add_boxes)
         add_num_local += add_boxes
         if show or out_dir:
             if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
@@ -151,10 +95,6 @@ def single_gpu_test(model,
 
         for _ in range(batch_size):
             prog_bar.update()
-    # print()
-    # print(add_num)
-    # print(pseudo_num)
-    # print(ori_num)
     return results
 
 

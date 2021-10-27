@@ -235,7 +235,7 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
 
         bbox_targets = self.bbox_head.get_targets(sampling_results, gt_bboxes,
                                                   gt_labels, self.train_cfg)
-        unc = True if '_' in img_metas[0]['ori_filename'] else False
+        unc = True if img_metas[0]['label_type'] else False
         loss_bbox = self.bbox_head.loss(bbox_results['cls_score'],
                                         bbox_results['bbox_pred'],
                                         sampling_results,
