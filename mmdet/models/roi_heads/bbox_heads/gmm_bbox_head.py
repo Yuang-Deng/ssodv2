@@ -406,10 +406,11 @@ class GMMBBoxHead(BaseModule):
                 box_target_unc = box_unc_logit.view(box_unc_logit.size(0), cls_num, 4).max(dim=-1)[0][pos_gt_map, labels[pos_gt_map]]
                 box_logit_unc = box_unc_logit.view(box_unc_logit.size(0), cls_num, 4).max(dim=-1)[0][pos_inds, labels[pos_inds]]
                 bbox_weights = torch.ones_like(bbox_weights)
+                bbox_weights = bbox_weights[pos_inds, 0][:, None]
                 losses['loss_unc_box'] = self.loss_unc(
                         abs(box_logit_unc[:, None]),
                         abs(box_target_unc[:, None]),
-                        bbox_weights[pos_inds, 0],
+                        bbox_weights,
                         avg_factor=box_target_unc.size(0),
                         reduction_override=reduction_override) * self.lambda_unc_box
                 
