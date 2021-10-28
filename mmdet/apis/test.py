@@ -32,6 +32,7 @@ def single_gpu_test(model,
                     show=False,
                     out_dir=None,
                     show_score_thr=0.7,
+                    return_meta=False
                     ):
     dy_th=[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
                0.5, 0.7, 0.5, 0.5, 0.5, 0.5,
@@ -43,9 +44,12 @@ def single_gpu_test(model,
     ori_num = [0] * 20
     add_num_local = 0
     results = []
+    return_img_metas = []
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
     for i, data in enumerate(data_loader):
+        batch_img_metas = data['img_metas'][0].data
+        return_img_metas.extend(batch_img_metas[0])
         flag = False
         if 'gt_labels' in data.keys():
             tags = data.pop('gt_labels')
@@ -95,7 +99,11 @@ def single_gpu_test(model,
 
         for _ in range(batch_size):
             prog_bar.update()
-    return results
+
+    if return_meta:
+        return results, return_img_metas
+    else:
+        return results
 
 
 def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
