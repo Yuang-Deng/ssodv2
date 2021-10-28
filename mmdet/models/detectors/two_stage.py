@@ -150,7 +150,8 @@ class TwoStageDetector(BaseDetector):
         # losses.update(roi_losses)
 
         # return losses
-        kwargs.pop('label_type')
+        if 'label_type' in kwargs.keys():
+            kwargs.pop('label_type')
         if img_metas[-1]['label_type'] == 0:
             return self._stage1_forward_train(img, img_metas, gt_bboxes, gt_labels, gt_bboxes_ignore,
                          gt_masks, proposals, **kwargs)

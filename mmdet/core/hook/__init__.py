@@ -9,10 +9,12 @@ from .grad_cam_hook import GradCamHook
 from .roi_epoch_set_hook import RoiEpochSetHook
 from .eval_hooks import EvalNDHook
 from .gt_unc_hook import GtUncHook, DistGtUncHook
+from .pseudo_label_gen import PseudoHook, DistPseudoHook
 
 __all__ = [
     'SyncRandomSizeHook', 'YOLOXModeSwitchHook', 'SyncNormHook',
     'ExpMomentumEMAHook', 'LinearMomentumEMAHook', 'YOLOXLrUpdaterHook',
     'CheckInvalidLossHook', 'GradCamHook', 'RoiEpochSetHook',
-    'EvalNDHook', 'GtUncHook', 'DistGtUncHook'
+    'EvalNDHook', 'GtUncHook', 'DistGtUncHook', 'PseudoHook',
+    'DistPseudoHook'
 ]

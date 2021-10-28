@@ -49,7 +49,7 @@ test_pipeline = [
     dict(type='LoadAnnotations', with_bbox=True),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(1333, 800),
+        img_scale=(1024, 800),
         flip=False,
         transforms=[
             dict(type='Resize', keep_ratio=True),
@@ -68,7 +68,7 @@ data = dict(
             ann_file=[
                 data_root + 'annotations/semi_supervised/instances_train2017.1@'+str(percent)+'.json',
             ],
-            img_prefix=[data_root + 'train2017/', data_root + 'VOC2012/'],
+            img_prefix=[data_root + 'train2017/', data_root + 'val2017/'],
             ),
             val=dict(
                 ann_file=data_root + 'annotations/instances_val2017.json',

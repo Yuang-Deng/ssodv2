@@ -45,6 +45,8 @@ def single_gpu_test(model,
     add_num_local = 0
     results = []
     return_img_metas = []
+    return_boxes = []
+    return_labels = []
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
     for i, data in enumerate(data_loader):
@@ -57,7 +59,7 @@ def single_gpu_test(model,
             # ori_box = data.pop('ori_boxes')
             flag = True
         with torch.no_grad():
-            result = model(return_loss=False, rescale=True, **data)
+            result, det_box, det_label = model(return_loss=False, rescale=True, **data)
             # if flag:
             #     cur_add_num, cur_pseudo_num = gen_voc_label(data, result, tags, box, box, [show_score_thr] * len(VOC_CLASSES))
         batch_size = len(result)
@@ -96,12 +98,14 @@ def single_gpu_test(model,
             result = [(bbox_results, encode_mask_results(mask_results))
                       for bbox_results, mask_results in result]
         results.extend(result)
+        return_boxes.extend(det_box)
+        return_labels.extend(det_label)
 
         for _ in range(batch_size):
             prog_bar.update()
 
     if return_meta:
-        return results, return_img_metas
+        return results, return_img_metas, return_boxes, return_labels
     else:
         return results
 
@@ -134,7 +138,7 @@ def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
     time.sleep(2)  # This line can prevent deadlock problem in some cases.
     for i, data in enumerate(data_loader):
         with torch.no_grad():
-            result = model(return_loss=False, rescale=True, **data)
+            result, det_box, det_label = model(return_loss=False, rescale=True, **data)
             # encode mask results
             if isinstance(result[0], tuple):
                 result = [(bbox_results, encode_mask_results(mask_results))

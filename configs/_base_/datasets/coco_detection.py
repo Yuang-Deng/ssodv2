@@ -16,9 +16,10 @@ train_pipeline = [
 ]
 val_pipeline = [
     dict(type='LoadImageFromFile'),
+    dict(type='LoadAnnotations', with_bbox=True),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(1333, 800),
+        img_scale=(1024, 800),
         flip=False,
         transforms=[
             dict(type='Resize', keep_ratio=True),

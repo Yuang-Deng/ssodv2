@@ -10,7 +10,7 @@ from mmcv.runner import (HOOKS, DistSamplerSeedHook, EpochBasedRunner,
                          build_runner)
 from mmcv.utils import build_from_cfg
 
-from mmdet.core import DistEvalHook, EvalHook, DistGtUncHook, GtUncHook
+from mmdet.core import DistEvalHook, EvalHook, DistGtUncHook, GtUncHook, PseudoHook, DistPseudoHook
 from mmdet.datasets import (build_dataloader, build_dataset,
                             replace_ImageToTensor)
 from mmdet.utils import get_root_logger
@@ -42,7 +42,8 @@ def train_detector(model,
                    validate=False,
                    timestamp=None,
                    meta=None,
-                   mem=True):
+                   mem=True,
+                   pseudo=True):
     logger = get_root_logger(log_level=cfg.log_level)
 
     # prepare data loaders
@@ -166,6 +167,26 @@ def train_detector(model,
     #     mem_hook = DistGtUncHook if distributed else GtUncHook
     #     runner.register_hook(
     #         mem_hook(mem_dataloader), priority='LOW')
+
+    if pseudo:
+        val_samples_per_gpu = cfg.data.test.pop('samples_per_gpu', 1)
+        if val_samples_per_gpu > 1:
+            # Replace 'ImageToTensor' to 'DefaultFormatBundle'
+            cfg.data.test.pipeline = replace_ImageToTensor(
+                cfg.data.test.pipeline)
+        pseudo_dataset = build_dataset(cfg.data.test, dict(test_mode=True))
+        pseudo_dataloader = build_dataloader(
+            pseudo_dataset,
+            samples_per_gpu=val_samples_per_gpu,
+            workers_per_gpu=cfg.data.workers_per_gpu,
+            dist=distributed,
+            shuffle=False)
+
+        pseudo_hook = DistPseudoHook if distributed else PseudoHook
+        runner.register_hook(
+            pseudo_hook(pseudo_dataloader, start=cfg.runner.max_epochs, interval=1, metric=eval_cfg['metric']), priority='LOW')
+        # runner.register_hook(
+        #     mem_hook(pseudo_dataloader, start=cfg.runner.max_epochs, interval=1, metric=eval_cfg['metric']), priority='LOW')
 
 
     # user-defined hooks
