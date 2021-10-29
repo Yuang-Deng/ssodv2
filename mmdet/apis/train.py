@@ -168,23 +168,23 @@ def train_detector(model,
     #     runner.register_hook(
     #         mem_hook(mem_dataloader), priority='LOW')
 
-    if pseudo:
-        val_samples_per_gpu = cfg.data.test.pop('samples_per_gpu', 1)
-        if val_samples_per_gpu > 1:
-            # Replace 'ImageToTensor' to 'DefaultFormatBundle'
-            cfg.data.test.pipeline = replace_ImageToTensor(
-                cfg.data.test.pipeline)
-        pseudo_dataset = build_dataset(cfg.data.test, dict(test_mode=True))
-        pseudo_dataloader = build_dataloader(
-            pseudo_dataset,
-            samples_per_gpu=val_samples_per_gpu,
-            workers_per_gpu=cfg.data.workers_per_gpu,
-            dist=distributed,
-            shuffle=False)
+    # if pseudo and 'unlabel' in cfg.data.test.ann_file:
+    #     val_samples_per_gpu = cfg.data.test.pop('samples_per_gpu', 1)
+    #     if val_samples_per_gpu > 1:
+    #         # Replace 'ImageToTensor' to 'DefaultFormatBundle'
+    #         cfg.data.test.pipeline = replace_ImageToTensor(
+    #             cfg.data.test.pipeline)
+    #     pseudo_dataset = build_dataset(cfg.data.test, dict(test_mode=True))
+    #     pseudo_dataloader = build_dataloader(
+    #         pseudo_dataset,
+    #         samples_per_gpu=val_samples_per_gpu,
+    #         workers_per_gpu=cfg.data.workers_per_gpu,
+    #         dist=distributed,
+    #         shuffle=False)
 
-        pseudo_hook = DistPseudoHook if distributed else PseudoHook
-        runner.register_hook(
-            pseudo_hook(pseudo_dataloader, start=cfg.runner.max_epochs, interval=1, metric=eval_cfg['metric']), priority='LOW')
+    #     pseudo_hook = DistPseudoHook if distributed else PseudoHook
+    #     runner.register_hook(
+    #         pseudo_hook(pseudo_dataloader, start=cfg.runner.max_epochs, interval=1, metric=eval_cfg['metric']), priority='LOW')
         # runner.register_hook(
         #     mem_hook(pseudo_dataloader, start=cfg.runner.max_epochs, interval=1, metric=eval_cfg['metric']), priority='LOW')
 
