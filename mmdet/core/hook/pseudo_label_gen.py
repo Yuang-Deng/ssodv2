@@ -8,6 +8,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from mmcv.runner.hooks import HOOKS, Hook
 from torch.utils.data import DataLoader
 import json
+from mmcv.runner import get_dist_info
 
 @HOOKS.register_module()
 class PseudoHook(Hook):
@@ -66,11 +67,12 @@ class PseudoHook(Hook):
 
     def _do_evaluate(self, runner):
         """perform evaluation and save ckpt."""
-        if not self._should_evaluate(runner):
+        if not self._should_evaluate(runner) and runner.rank != 0:
             return
-
+        
         from mmdet.apis import single_gpu_test
-        results, img_metas, boxex, labels = single_gpu_test(runner.model, self.dataloader, show=False, return_meta=True)
+        filename = self.dataloader.dataset.ann_file
+        results, img_metas, boxex, labels = single_gpu_test(runner.model, self.dataloader, show=False, return_meta=True, annfile=filename, rank=runner.rank)
         filename = self.dataloader.dataset.ann_file
         with open("C:/Users/Alex/WorkSpace/dataset/coco/annotations/instances_val2017.json", 'r') as load_f:
             load_dict = json.load(load_f)
@@ -137,21 +139,26 @@ class DistPseudoHook(BaseDistEvalHook):
 
         if not self._should_evaluate(runner):
             return
+        
+        rank, world_size = get_dist_info()
 
         tmpdir = self.tmpdir
         if tmpdir is None:
             tmpdir = osp.join(runner.work_dir, '.eval_hook')
 
         from mmdet.apis import multi_gpu_test
-        results = multi_gpu_test(
-            runner.model,
-            self.dataloader,
-            tmpdir=tmpdir,
-            gpu_collect=self.gpu_collect)
+        filename = self.dataloader.dataset.ann_file
+        results = multi_gpu_test(runner.model, self.dataloader, show=False, pseudo_gen=True, annfile=filename)
         if runner.rank == 0:
+            load_dicts = []
+            for i in range(world_size):
+                wfile = filename.split('.')[0] + str(i) + '.' + filename.split('.')[1]
+                load_dicts[i] = json.load(open(wfile, 'r'))
+            load_dict = load_dicts[0]
+            for i in range(1, world_size):
+                load_dict['annotations'].extend(load_dicts[i]['annotations'])
+            json.dump(load_dict, open(filename, 'w'))
             print('\n')
             runner.log_buffer.output['eval_iter_num'] = len(self.dataloader)
             key_score = self.evaluate(runner, results)
 
-            if self.save_best:
-                self._save_ckpt(runner, key_score)

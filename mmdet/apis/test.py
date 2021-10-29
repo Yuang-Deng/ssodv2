@@ -9,6 +9,7 @@ import pickle
 import shutil
 import tempfile
 import time
+import json
 import os
 from xml.dom.minidom import Document
 from mmdet.core import multiclass_nms
@@ -110,7 +111,7 @@ def single_gpu_test(model,
         return results
 
 
-def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
+def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False, pseudo_gen=False, annfile='filename'):
     """Test model with multiple gpus.
 
     This method tests model with multiple gpus and collects the results
@@ -133,17 +134,28 @@ def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
     results = []
     dataset = data_loader.dataset
     rank, world_size = get_dist_info()
+    return_img_metas = []
+    return_boxes = []
+    return_labels = []
     if rank == 0:
         prog_bar = mmcv.ProgressBar(len(dataset))
     time.sleep(2)  # This line can prevent deadlock problem in some cases.
     for i, data in enumerate(data_loader):
+        batch_img_metas = data['img_metas'][0].data
+        return_img_metas.extend(batch_img_metas[0])
         with torch.no_grad():
+            if 'gt_labels' in data.keys():
+                tags = data.pop('gt_labels')
+                box = data.pop('gt_bboxes')
+            # ori_box = data.pop('ori_boxes')
             result, det_box, det_label = model(return_loss=False, rescale=True, **data)
             # encode mask results
             if isinstance(result[0], tuple):
                 result = [(bbox_results, encode_mask_results(mask_results))
                           for bbox_results, mask_results in result]
         results.extend(result)
+        return_boxes.extend(det_box)
+        return_labels.extend(det_label)
 
         if rank == 0:
             batch_size = len(result)
@@ -152,10 +164,31 @@ def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
 
     # collect results from all ranks
     if gpu_collect:
-        results = collect_results_gpu(results, len(dataset))
+        reduce_results = collect_results_gpu(results, len(dataset))
     else:
-        results = collect_results_cpu(results, len(dataset), tmpdir)
-    return results
+        reduce_results = collect_results_cpu(results, len(dataset), tmpdir)
+
+    if pseudo_gen:
+        with open(annfile, 'r') as load_f:
+            load_dict = json.load(load_f)
+            load_dict['annotations'] = []
+            id = 0
+            for i, box, label in zip(return_img_metas, return_boxes, return_labels):
+                for b, l in zip(box, label):
+                    ann = {}
+                    ann['image_id'] = int(i['ori_filename'].split('.')[0])
+                    ann['bbox'] = list(map(int, b[0:4].cpu().numpy().tolist()))
+                    ann['category_id'] = l.item()
+                    ann['id'] = id
+                    ann['area'] = (ann['bbox'][2] - ann['bbox'][0]) * (ann['bbox'][3] - ann['bbox'][1])
+                    id += 1
+                    load_dict['annotations'].append(ann)
+        wfile = annfile.split('.')[0] + str(rank) + '.' + annfile.split('.')[1]
+        print('pseudo label save in ', wfile)
+        json.dump(load_dict, open(wfile, 'w'))
+    
+    
+    return reduce_results
 
 
 def collect_results_cpu(result_part, size, tmpdir=None):
