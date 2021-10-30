@@ -26,12 +26,6 @@ class PseudoHook(Hook):
             runner.log_buffer.output[name] = val
         runner.log_buffer.ready = True
 
-        if self.save_best is not None:
-            if self.key_indicator == 'auto':
-                # infer from eval_results
-                self._init_rule(self.rule, list(eval_res.keys())[0])
-            return eval_res[self.key_indicator]
-
         return None
 
     def _should_evaluate(self, runner):
