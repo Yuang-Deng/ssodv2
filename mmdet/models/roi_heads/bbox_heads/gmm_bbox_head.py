@@ -43,8 +43,12 @@ class GMMBBoxHead(BaseModule):
                  eta=12,
                  cls_lambda=1,
                  lam_box_loss=1,
-                 warm_epoch=2,
-                 unc_type='al',
+                 cls_warm_epoch=2,
+                 box_warm_epoch=2,
+                 cls_pos_lambda=1,
+                 cls_neg_lambda=1,
+                 cls_unc_type='al',
+                 box_unc_type='al',
                  lambda_unc_box=1,
                  lambda_unc_cls=1,
                  init_cfg=None):
@@ -65,10 +69,21 @@ class GMMBBoxHead(BaseModule):
         self.eta = eta
         self.cls_lambda = cls_lambda
         self.lam_box_loss = lam_box_loss
-        self.warm_epoch = warm_epoch
-        self.unc_type = unc_type
+        self.cls_warm_epoch = cls_warm_epoch
+        self.box_warm_epoch = box_warm_epoch
+        self.cls_pos_lambda = cls_pos_lambda
+        self.cls_neg_lambda = cls_neg_lambda
+        self.cls_unc_type = cls_unc_type
+        self.box_unc_type = box_unc_type
         self.lambda_unc_box = lambda_unc_box
-        self.lambda_unc_cls = lambda_unc_cls
+        self.lambda_unc_cls = lambda_unc_cls    
+
+        self.cls_gt_al = [0.011676047928631306, 0.013194473460316658, 0.004626300651580095, 0.011304869316518307, 0.008983615785837173, 0.012291173450648785, 0.015498469583690166, 0.015249814838171005, 0.007545147091150284, 0.010576263070106506, 0.01383853517472744 , 0.010896758176386356, 0.007504409644752741, 0.008247287012636662, 0.003804341424256563, 0.006531019229441881, 0.006469824817031622, 0.017160730436444283, 0.01712864451110363 , 0.015580035746097565]
+        self.cls_gt_ep = [0.0014669252559542656, 0.0010269444901496172, 0.001524801948107779, 0.0021521486341953278, 0.0010409681126475334, 0.0021159478928893805, 0.015673134475946426, 0.002468044636771083, 0.0035432521253824234, 0.001807992230169475, 0.0003179576597176492, 0.004923964384943247, 0.003719983622431755, 0.0011385264806449413, 0.00708423275500536, 0.0009856268297880888, 0.002989743836224079, 0.000680554483551532, 0.0006094087148085237, 0.003230171510949731]
+        self.box_gt_al = [0.4997519850730896 , 0.4818139374256134 , 0.41686928272247314, 0.6221621632575989 , 0.8729903697967529 , 0.38314908742904663, 0.25480929017066956, 0.45177340507507324, 0.6295313835144043 , 0.44437214732170105, 0.8023167848587036 , 0.3742786645889282 , 0.4825665056705475 , 0.45643332600593567, 0.5225471258163452 , 0.7808040380477905 , 0.5682315826416016 , 0.6573629975318909 , 0.42482975125312805, 0.35368612408638   ]
+        self.box_gt_ep = [0.10289988666772842, 0.139907568693161  , 0.13576948642730713, 0.15829303860664368, 0.15875084698200226, 0.16106688976287842, 0.11345464736223221, 0.09817182272672653, 0.25670957565307617, 0.1447836458683014 , 0.3406357169151306 , 0.10156666487455368, 0.15055552124977112, 0.11262432485818863, 0.22155672311782837, 0.23454366624355316, 0.17912887036800385, 0.1696951687335968 , 0.08456728607416153, 0.12094420194625854]
+
+
 
         self.bbox_coder = build_bbox_coder(bbox_coder)
         self.loss_cls = build_loss(loss_cls)
@@ -318,9 +333,9 @@ class GMMBBoxHead(BaseModule):
         pi_box = F.softmax(pi_box, dim=1)
         sigma_box = F.sigmoid(sigma_box)
 
-        mu_al_box = (pi_box * sigma_box).sum(dim=1)
+        mu_al_box = (pi_box * sigma_box).sum(dim=1).max(-1)[0]
         mu_ep_box = (pi_box * torch.pow(mu_box - (pi_box * mu_box).sum(dim=1)[:, None, :].expand(bbox_pred.size(0), 
-                        gmm_k, mu_box.size(2)), 2)).sum(dim=1)
+                        gmm_k, mu_box.size(2)), 2)).sum(dim=1).max(-1)[0]
 
         max_mu_ep_box = (pi_box * torch.pow(mu_box - (pi_box * mu_box).sum(dim=1)[:, None, :].expand(bbox_pred.size(0), 
                         gmm_k, mu_box.size(2)), 2)).sum(dim=1).max(-1)[0]
@@ -338,12 +353,33 @@ class GMMBBoxHead(BaseModule):
         mu_ep_cls = (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * torch.pow(mu_cls - (pi_cls.expand(cls_score.size(0), gmm_k, sigma_cls.size(2)) * mu_cls).sum(dim=1)[:, None, :].expand(cls_score.size(0), 
                         gmm_k, sigma_cls.size(2)), 2)).sum(dim=1)
 
-        if self.unc_type == 'al':
+        if self.box_unc_type == 'al':
             box_unc_logit = mu_al_box
-            cls_unc_logit = mu_al_cls
-        elif self.unc_type == 'ep':
+            box_unc_gt_static = self.box_gt_al
+        elif self.box_unc_type == 'ep':
             box_unc_logit = mu_ep_box
+            box_unc_gt_static = self.box_gt_ep
+        
+        if self.cls_unc_type == 'al':
+            cls_unc_logit = mu_al_cls
+            cls_unc_gt_static = self.cls_gt_al
+        elif self.cls_unc_type == 'ep':
             cls_unc_logit = mu_ep_cls
+            cls_unc_gt_static = self.cls_gt_ep
+
+        # split_list = [sr.bboxes.size(0) for sr in sampling_results]
+        # device = bbox_pred.device
+        # batch = split_list[0]
+        # pos_inds = torch.zeros([0]).to(device).long()
+        # pos_gt_map = torch.zeros([0]).to(device).long()
+        # # pos_label = torch.zeros([0]).to(device).long()
+        # for i, res in enumerate(sampling_results):
+        #     pos_inds = torch.cat([pos_inds, (torch.arange(0, res.pos_inds.size(0)).to(device).long() + (i * batch)).view(-1)])
+        #     pos_gt_map = torch.cat([pos_gt_map, (res.pos_assigned_gt_inds+ (i * batch)).view(-1)])
+        #     # pos_label = torch.cat([pos_label, (res.pos_gt_labels+ (i * batch)).view(-1)])
+        # box_logit = box_unc_logit[pos_inds]
+        # box_target = box_unc_logit[pos_gt_map]
+        # map_gt_target = labels[]
 
         if bbox_pred is not None:
             bg_class_ind = self.num_classes
@@ -377,46 +413,24 @@ class GMMBBoxHead(BaseModule):
                     pos_target = bbox_targets[pos_inds.type(torch.bool)]
                     pos_target = pos_target[:, None, :].expand(pos_target.size(0), gmm_k, pos_target.size(1))
                 loss_box = - torch.log((pos_pi_box * self._gaussian_dist_pdf(pos_mu_box, pos_target, pos_sigma_box)).sum(1) + 1e-9).sum(-1) / self.eta
-                if self.epoch > self.warm_epoch:
-                    print('max_mu_ep_box before softmax ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
-                    print(max_mu_ep_box)
-                    max_mu_ep_box = 1- F.softmax(max_mu_ep_box)
-                    losses['loss_bbox'] = ((loss_box * max_mu_ep_box).sum() / max_mu_ep_box.sum()) * self.lam_box_loss
-                    print('pos num:' + str(pos_pi_box.size(0)))
-                    print('max_mu_ep_box after softmax ----------------------------------------------------------')
-                    print(max_mu_ep_box)
+                if self.epoch > self.box_warm_epoch:
+                    # print('max_mu_ep_box before softmax ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
+                    # print(max_mu_ep_box)
+                    # max_mu_ep_box = 1- F.softmax(max_mu_ep_box)
+                    # losses['loss_bbox'] = ((loss_box * max_mu_ep_box).sum() / max_mu_ep_box.sum()) * self.lam_box_loss
+                    # print('pos num:' + str(pos_pi_box.size(0)))
+                    # print('max_mu_ep_box after softmax ----------------------------------------------------------')
+                    # print(max_mu_ep_box)
+                    cls_label = labels[pos_inds.type(torch.bool)]
+                    box_pos_unc_gt =box_unc_gt_static[cls_label]
+                    box_pos_unc = box_unc_logit[pos_inds.type(torch.bool)]
+                    box_unc_reweight = abs(abs(box_pos_unc) - abs(box_pos_unc_gt))
+                    box_unc_reweight = 1 - box_unc_reweight / box_unc_reweight.sum()
+                    losses['loss_bbox'] = ((loss_box * box_unc_reweight).sum() / box_unc_reweight.sum()) * self.lam_box_loss
                 else:
                     losses['loss_bbox'] = (loss_box).sum() / pos_mu_box.size(0)
             else:
-                losses['loss_bbox'] = bbox_pred[pos_inds].sum()
-            
-            if unc:
-                # gt unc loss 先获取gt的unc，再计算pos的
-                split_list = [sr.bboxes.size(0) for sr in sampling_results]
-                device = bbox_pred.device
-                batch = split_list[0]
-                pos_inds = torch.zeros([0]).to(device).long()
-                pos_gt_map = torch.zeros([0]).to(device).long()
-                # pos_label = torch.zeros([0]).to(device).long()
-                for i, res in enumerate(sampling_results):
-                    pos_inds = torch.cat([pos_inds, (torch.arange(0, res.pos_inds.size(0)).to(device).long() + (i * batch)).view(-1)])
-                    pos_gt_map = torch.cat([pos_gt_map, (res.pos_assigned_gt_inds+ (i * batch)).view(-1)])
-                    # pos_label = torch.cat([pos_label, (res.pos_gt_labels+ (i * batch)).view(-1)])
-                
-                box_target_unc = box_unc_logit.view(box_unc_logit.size(0), cls_num, 4).max(dim=-1)[0][pos_gt_map, labels[pos_gt_map]]
-                box_logit_unc = box_unc_logit.view(box_unc_logit.size(0), cls_num, 4).max(dim=-1)[0][pos_inds, labels[pos_inds]]
-                bbox_weights = torch.ones_like(bbox_weights)
-                bbox_weights = bbox_weights[pos_inds, 0][:, None]
-                losses['loss_unc_box'] = self.loss_unc(
-                        abs(box_logit_unc[:, None]),
-                        abs(box_target_unc[:, None]),
-                        bbox_weights,
-                        avg_factor=box_target_unc.size(0),
-                        reduction_override=reduction_override) * self.lambda_unc_box
-                
-                cls_target_unc = cls_unc_logit[pos_gt_map, labels[pos_gt_map]]
-                cls_logit_unc = cls_unc_logit[pos_inds, labels[pos_inds]]
-                losses['loss_unc_cls'] = abs(abs(cls_target_unc) - abs(cls_logit_unc)).mean() * self.lambda_unc_cls            
+                losses['loss_bbox'] = bbox_pred[pos_inds].sum()         
         
         if cls_score is not None:
             avg_factor = max(torch.sum(label_weights > 0).float().item(), 1.)
@@ -427,7 +441,21 @@ class GMMBBoxHead(BaseModule):
                 inds = torch.arange(0, cls_score.size(0), 1)
                 gt_score = cls_score[inds, :, labels[inds]]
                 x_max = cls_score.max()
-                loss_cls_ = - ((pi_cls.view(pi_cls.size(0), pi_cls.size(1)) * (gt_score - (torch.log(torch.exp(cls_score - x_max).sum(dim=-1)) + x_max))).sum() / avg_factor) * self.cls_lambda
+                loss_cls_ = pi_cls.view(pi_cls.size(0), pi_cls.size(1)) * (gt_score - (torch.log(torch.exp(cls_score - x_max).sum(dim=-1)) + x_max))
+
+                if self.epoch > self.cls_warm_epoch:
+                    loss_cls_pos = loss_cls_[pos_inds.type(torch.bool)]
+                    loss_cls_neg = loss_cls_[not pos_inds.type(torch.bool)]
+                    cls_label = labels[pos_inds.type(torch.bool)]
+                    cls_pos_unc_gt = cls_unc_gt_static[cls_label]
+                    cls_pos_unc = cls_unc_logit[pos_inds.type(torch.bool)]
+                    cls_unc_reweight = abs(abs(cls_pos_unc) - abs(cls_pos_unc_gt))
+                    cls_unc_reweight = 1 - cls_unc_reweight / cls_unc_reweight.sum()
+                    loss_cls_pos = - ((loss_cls_pos * cls_unc_reweight).sum() / cls_unc_reweight.sum())
+                    loss_cls_neg = - (loss_cls_neg.sum() / loss_cls_neg.size(0))
+                    loss_cls_ = loss_cls_pos * self.cls_pos_lambda + loss_cls_neg * self.cls_neg_lambda
+                else:
+                    loss_cls_ = - (loss_cls_.sum() / avg_factor) * self.cls_lambda
                 if isinstance(loss_cls_, dict):
                     losses.update(loss_cls_)
                 else:
