@@ -43,8 +43,8 @@ class GMMBBoxHead(BaseModule):
                  eta=12,
                  cls_lambda=1,
                  lam_box_loss=1,
-                 cls_warm_epoch=2,
-                 box_warm_epoch=2,
+                 cls_warm_epoch=0,
+                 box_warm_epoch=0,
                  cls_pos_lambda=1,
                  cls_neg_lambda=1,
                  cls_unc_type='al',
@@ -355,17 +355,17 @@ class GMMBBoxHead(BaseModule):
 
         if self.box_unc_type == 'al':
             box_unc_logit = mu_al_box
-            box_unc_gt_static = self.box_gt_al
+            box_unc_gt_static = torch.Tensor(self.box_gt_al).to(mu_al_box.device)
         elif self.box_unc_type == 'ep':
             box_unc_logit = mu_ep_box
-            box_unc_gt_static = self.box_gt_ep
+            box_unc_gt_static = torch.Tensor(self.box_gt_ep).to(mu_al_box.device)
         
         if self.cls_unc_type == 'al':
             cls_unc_logit = mu_al_cls
-            cls_unc_gt_static = self.cls_gt_al
+            cls_unc_gt_static = torch.Tensor(self.cls_gt_al).to(mu_al_box.device)
         elif self.cls_unc_type == 'ep':
             cls_unc_logit = mu_ep_cls
-            cls_unc_gt_static = self.cls_gt_ep
+            cls_unc_gt_static = torch.Tensor(self.cls_gt_ep).to(mu_al_box.device)
 
         # split_list = [sr.bboxes.size(0) for sr in sampling_results]
         # device = bbox_pred.device
@@ -441,16 +441,16 @@ class GMMBBoxHead(BaseModule):
                 inds = torch.arange(0, cls_score.size(0), 1)
                 gt_score = cls_score[inds, :, labels[inds]]
                 x_max = cls_score.max()
-                loss_cls_ = pi_cls.view(pi_cls.size(0), pi_cls.size(1)) * (gt_score - (torch.log(torch.exp(cls_score - x_max).sum(dim=-1)) + x_max))
+                loss_cls_ = (pi_cls.view(pi_cls.size(0), pi_cls.size(1)) * (gt_score - (torch.log(torch.exp(cls_score - x_max).sum(dim=-1)) + x_max))).sum(dim=-1)
 
-                if self.epoch > self.cls_warm_epoch:
+                if self.epoch >= self.cls_warm_epoch:
                     loss_cls_pos = loss_cls_[pos_inds.type(torch.bool)]
-                    loss_cls_neg = loss_cls_[not pos_inds.type(torch.bool)]
+                    loss_cls_neg = loss_cls_[~pos_inds.type(torch.bool)]
                     cls_label = labels[pos_inds.type(torch.bool)]
                     cls_pos_unc_gt = cls_unc_gt_static[cls_label]
-                    cls_pos_unc = cls_unc_logit[pos_inds.type(torch.bool)]
+                    cls_pos_unc = cls_unc_logit[pos_inds.type(torch.bool), labels[pos_inds.type(torch.bool)]]
                     cls_unc_reweight = abs(abs(cls_pos_unc) - abs(cls_pos_unc_gt))
-                    cls_unc_reweight = 1 - cls_unc_reweight / cls_unc_reweight.sum()
+                    cls_unc_reweight = 1 - cls_unc_reweight / (cls_unc_reweight.sum() + 1e-5)
                     loss_cls_pos = - ((loss_cls_pos * cls_unc_reweight).sum() / cls_unc_reweight.sum())
                     loss_cls_neg = - (loss_cls_neg.sum() / loss_cls_neg.size(0))
                     loss_cls_ = loss_cls_pos * self.cls_pos_lambda + loss_cls_neg * self.cls_neg_lambda
